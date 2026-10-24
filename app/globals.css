@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* هوية MT Reels AI: كحلي داكن، رمادي فحمي، أبيض، ولمسات ذهبية للعناصر المهمة */
+@theme {
+  --color-navy-900: #0b1a33;
+  --color-navy-800: #112647;
+  --color-navy-700: #1a3560;
+  --color-charcoal-800: #2b2e35;
+  --color-charcoal-600: #5a5f6a;
+  --color-charcoal-200: #d9dce3;
+  --color-gold-500: #d4a22a;
+  --color-gold-400: #e3b94e;
+  --color-gold-100: #fbf3dc;
+  --color-surface: #ffffff;
+  --color-canvas: #f5f6f9;
+  --color-danger: #b42318;
+  --color-danger-soft: #fdecea;
+  --color-success: #1f7a4d;
+  --color-success-soft: #e6f4ec;
+  --font-sans: "Segoe UI", Tahoma, "Noto Sans Arabic", "Arial", sans-serif;
+}
+
+:root {
+  --background: #f5f6f9;
+  --foreground: #2b2e35;
+  color-scheme: light;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  line-height: 1.7;
+}
+
+/* الكلام المنطوق يبقى مقروءًا وواضح الفواصل */
+.spoken {
+  white-space: pre-line;
+  line-height: 2;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold-500);
+  outline-offset: 2px;
+}
