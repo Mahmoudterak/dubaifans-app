@@ -4,120 +4,128 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Virality Predictor (local)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg:#0a1a1f; --grid:rgba(79,183,176,.06); --panel:#0e2228; --panel2:#11292f;
+  --bg:#0a1a1f; --grid:rgba(79,183,176,.06); --panel:#0e2228; --panel2:#122b32;
   --line:#2a4d55; --text:#e8f4f4; --muted:#86a4aa; --teal:#4fb7b0; --teal2:#8fe0d9;
-  --gold:#f2b544; --red:#e08b7f;
+  --gold:#f2b544; --red:#e08b7f; --ok:#4fb7b0;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg:#eef5f5; --grid:rgba(20,80,85,.06); --panel:#ffffff; --panel2:#f4fafa;
+    --bg:#eef5f5; --grid:rgba(20,80,85,.06); --panel:#ffffff; --panel2:#f3fafa;
     --line:#c7dbdd; --text:#0f2529; --muted:#557077; --teal:#2f9f98; --teal2:#1f7f79; --gold:#c98b12; --red:#b85a4f;
   }
 }
 :root[data-theme="dark"] {
-  --bg:#0a1a1f; --grid:rgba(79,183,176,.06); --panel:#0e2228; --panel2:#11292f;
+  --bg:#0a1a1f; --grid:rgba(79,183,176,.06); --panel:#0e2228; --panel2:#122b32;
   --line:#2a4d55; --text:#e8f4f4; --muted:#86a4aa; --teal:#4fb7b0; --teal2:#8fe0d9; --gold:#f2b544; --red:#e08b7f;
 }
 * { box-sizing: border-box; }
 html, body { margin:0; }
 body {
   background: var(--bg); color: var(--text);
-  font-family: system-ui, "Segoe UI", Tahoma, "Noto Naskh Arabic", sans-serif;
-  min-height: 100vh;
+  font-family: Cairo, "Segoe UI", Tahoma, system-ui, sans-serif;
+  min-height: 100vh; line-height: 1.5;
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 40px 40px;
 }
-main { max-width: 980px; margin: 0 auto; padding: 20px 16px 56px; }
-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom: 18px; }
-.brand { font-size: 13px; letter-spacing: .22em; color: var(--muted); text-transform: uppercase; }
-.brand b { color: var(--teal2); font-weight: 700; }
-.tools { display:flex; gap:8px; }
+.ltr, [dir="ltr-num"] { direction: ltr; unicode-bidi: isolate; display: inline-block; font-variant-numeric: tabular-nums; }
+main { max-width: 1040px; margin: 0 auto; padding: 18px 14px 56px; }
+header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom: 14px; }
+.brand { font-size: 13px; letter-spacing: .2em; color: var(--muted); text-transform: uppercase; }
+.brand b { color: var(--teal2); font-weight: 800; }
+.tools { display:flex; gap:8px; flex-wrap: wrap; }
 .btn {
   background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-  border-radius: 10px; padding: 8px 14px; font: inherit; font-size: 14px; cursor: pointer;
+  border-radius: 10px; padding: 7px 14px; font: inherit; font-size: 14px; cursor: pointer;
 }
 .btn:hover { border-color: var(--teal); }
 .btn.primary { background: var(--teal); color: #042025; border-color: var(--teal); font-weight: 700; }
 .btn:disabled { opacity: .45; cursor: default; }
 
 .drop {
-  display: block; background: var(--panel); border: 1.5px dashed var(--line); border-radius: 18px;
-  padding: 30px 18px; text-align: center; cursor: pointer; transition: border-color .15s;
+  display:block; background: var(--panel); border: 1.5px dashed var(--line); border-radius: 18px;
+  padding: 26px 16px; text-align:center; cursor: pointer; transition: border-color .15s;
 }
 .drop.over, .drop:hover { border-color: var(--teal); }
-.drop strong { display:block; font-size: 17px; margin-bottom: 6px; }
+.drop strong { display:block; font-size: 17px; margin-bottom: 4px; font-weight: 700; }
 .drop span { color: var(--muted); font-size: 13px; }
 input[type=file] { display: none; }
 
-.stage { display:grid; grid-template-columns: 1fr; gap: 16px; margin-top: 16px; }
-@media (min-width: 760px) { .stage { grid-template-columns: 300px 1fr; } }
+.status { margin: 12px 0 0; color: var(--muted); font-size: 14px; min-height: 22px; text-align:center; }
+.status.err { color: var(--red); }
+.progress { height: 6px; background: var(--line); border-radius: 4px; overflow:hidden; margin-top: 10px; }
+.progress i { display:block; height:100%; width:0; background: var(--teal); transition: width .2s; }
 
+.stage { display:grid; grid-template-columns: 1fr; gap: 16px; margin-top: 16px; }
+@media (min-width: 820px) { .stage { grid-template-columns: 1fr 300px; align-items: start; } .stage > .phone-col { order: 2; } .stage > .main-col { order: 1; } }
+.phone-col { display:grid; gap: 14px; justify-items: center; }
 .phone {
-  justify-self: center; width: 260px; max-width: 100%;
-  aspect-ratio: 9/16; background: #04121a; border: 2px solid var(--line);
-  border-radius: 28px; padding: 10px; position: relative; overflow: hidden;
+  width: 270px; max-width: 100%; aspect-ratio: 9/16; background: #04121a; border: 2px solid var(--line);
+  border-radius: 30px; padding: 10px; position: relative; overflow: hidden;
 }
-.phone video { width: 100%; height: 100%; object-fit: cover; border-radius: 20px; background:#000; display:block; }
-.phone .empty {
-  position:absolute; inset: 10px; border-radius: 20px;
-  display:grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; padding: 8px;
-}
-.phone .empty i { background: var(--panel2); border-radius: 10px; }
+.phone video { width: 100%; height: 100%; object-fit: contain; border-radius: 22px; background:#000; display:block; }
 .phone .tag {
   position:absolute; top: 18px; inset-inline-end: 18px; background: #f4f4f4; color:#111;
-  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; letter-spacing: .05em;
+  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; letter-spacing: .05em; z-index: 2;
 }
+.thumbs { display:grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 270px; max-width: 100%; }
+.thumbs img { width:100%; aspect-ratio: 9/16; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2); }
 
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
-.panel h2 { margin: 0 0 12px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.main-col { display:grid; gap: 14px; min-width: 0; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px; min-width: 0; }
+.panel h2 { margin: 0 0 12px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 
-.score { display:flex; align-items:center; gap: 18px; flex-wrap: wrap; }
-.ring { width: 118px; height: 118px; flex: none; }
-.ring .num { font-size: 40px; font-weight: 800; fill: var(--gold); }
-.ring .of { font-size: 14px; fill: var(--muted); }
-.score .meta { flex: 1; min-width: 180px; }
-.score .meta .big { font-size: 15px; color: var(--text); margin-bottom: 6px; font-weight: 600; }
-.score .meta .small { font-size: 13px; color: var(--muted); line-height: 1.6; }
-.verdict { display:inline-block; margin-top: 8px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--teal); color: var(--teal2); }
+.score { display:grid; grid-template-columns: auto 1fr; gap: 16px; align-items:center; }
+@media (max-width: 480px) { .score { grid-template-columns: 1fr; justify-items: center; text-align:center; } }
+.ring { width: 130px; height: 130px; }
+.ring .num { font-size: 40px; font-weight: 800; fill: var(--gold); font-family: Cairo, system-ui, sans-serif; }
+.score .meta .big { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+.score .meta .small { font-size: 13px; color: var(--muted); word-break: break-word; }
+.verdict { display:inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; border: 1px solid var(--teal); color: var(--teal2); }
 .verdict.low { border-color: var(--red); color: var(--red); }
 .verdict.mid { border-color: var(--gold); color: var(--gold); }
+.bands { display:grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 14px; }
+.band { border: 1px solid var(--line); border-radius: 10px; padding: 6px 4px; text-align:center; font-size: 12px; color: var(--muted); }
+.band b { display:block; font-size: 13px; color: var(--text); }
+.band.on { border-color: var(--teal); background: var(--panel2); color: var(--text); }
+.band.on.low { border-color: var(--red); }
+.band.on.mid { border-color: var(--gold); }
 
-.chips { display:grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 16px; }
+.chips { display:grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
 @media (max-width: 560px) { .chips { grid-template-columns: repeat(3, 1fr); } }
 .chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px 8px; text-align:center; }
-.chip .t { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; direction: ltr; }
-.chip .p { font-size: 20px; font-weight: 700; margin: 2px 0 6px; font-variant-numeric: tabular-nums; direction: ltr; }
+.chip.off { opacity: .4; }
+.chip .t { font-size: 12px; color: var(--muted); }
+.chip .p { font-size: 20px; font-weight: 800; margin: 2px 0 6px; font-variant-numeric: tabular-nums; direction: ltr; }
 .chip .b { height: 4px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .chip .b i { display:block; height:100%; background: var(--teal); }
 .chip.weak { border-color: var(--red); }
 .chip.weak .b i { background: var(--red); }
+.curve svg { width: 100%; height: 170px; display:block; }
 
-.curve { margin-top: 14px; }
-.curve svg { width: 100%; height: 160px; display:block; }
-
-.signals { display:grid; grid-template-columns: 1fr; gap: 14px; }
-.sig { display:grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items:center; }
-.sig .n { font-size: 15px; }
-.sig .v { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; direction: ltr; }
+.sig { display:grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items:center; margin-bottom: 12px; }
+.sig .n { font-size: 15px; font-weight: 600; }
+.sig .v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; direction: ltr; }
 .sig .track { grid-column: 1 / -1; height: 10px; border-radius: 6px; background: var(--line); overflow:hidden; }
-.sig .track i { display:block; height:100%; border-radius: 6px; background: linear-gradient(90deg, var(--teal), var(--teal2)); transition: width .6s ease; }
+.sig .track i { display:block; height:100%; border-radius: 6px; background: linear-gradient(270deg, var(--teal), var(--teal2)); transition: width .6s ease; }
 
-dl { display:grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 0; font-size: 14px; }
+.twocol { display:grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 640px) { .twocol { grid-template-columns: 1fr 1fr; } }
+
+dl { display:grid; grid-template-columns: 1fr auto; gap: 8px 14px; margin: 0; font-size: 14px; }
 dt { color: var(--muted); }
-dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular-nums; }
+dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .tips { margin: 0; padding: 0; list-style: none; display:grid; gap: 8px; }
-.tips li { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; line-height: 1.6; }
-.tips li b { color: var(--teal2); }
+.tips li { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; line-height: 1.7; }
 
-.status { margin-top: 12px; color: var(--muted); font-size: 14px; min-height: 22px; text-align:center; }
-.status.err { color: var(--red); }
-.note { color: var(--muted); font-size: 12px; line-height: 1.7; margin-top: 18px; text-align:center; }
+.actions { display:flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+.note { color: var(--muted); font-size: 12px; line-height: 1.8; margin-top: 18px; text-align:center; }
 .hidden { display:none !important; }
-.progress { height: 6px; background: var(--line); border-radius: 4px; overflow:hidden; margin-top: 10px; }
-.progress i { display:block; height:100%; width:0; background: var(--teal); transition: width .2s; }
 </style>
 </head>
 <body>
@@ -128,63 +136,72 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
       <button class="btn" id="langBtn" type="button">EN</button>
       <button class="btn" id="pickBtn" type="button">فيديو جديد</button>
       <button class="btn" id="jsonBtn" type="button" disabled>JSON</button>
+      <button class="btn" id="copyBtn" type="button" disabled>نسخ الملخص</button>
     </div>
   </header>
 
   <label class="drop" id="drop">
     <strong data-i="dropTitle">اسحب الفيديو هنا أو اضغط للاختيار</strong>
-    <span data-i="dropSub">MP4 · MOV · WebM · يتم التحليل داخل متصفحك، ولا يُرفع الملف إلى أي مكان</span>
-    <input type="file" id="file" accept="video/*">
+    <span data-i="dropSub">أي صيغة فيديو · يتم التحليل داخل متصفحك، ولا يُرفع الملف إلى أي مكان</span>
+    <input type="file" id="file" accept="video/*,.mp4,.m4v,.mov,.webm,.mkv,.avi,.wmv,.flv,.3gp,.3g2,.ts,.mts,.m2ts,.mpg,.mpeg,.ogv,.vob,.divx,.asf,.f4v">
   </label>
   <div class="progress hidden" id="prog"><i></i></div>
   <div class="status" id="status"></div>
 
   <section class="stage hidden" id="stage">
-    <div>
+    <div class="phone-col">
       <div class="phone" id="phone">
-        <div class="empty" id="phoneEmpty"><i></i><i></i><i></i><i></i></div>
         <span class="tag" data-i="draft">DRAFT</span>
         <video id="vid" controls playsinline muted></video>
       </div>
+      <div class="thumbs hidden" id="thumbs"></div>
     </div>
 
-    <div style="display:grid; gap:16px">
+    <div class="main-col">
       <div class="panel">
-        <h2 data-i="viral">Viral score</h2>
+        <h2 data-i="viral">الدرجة الفيروسية</h2>
         <div class="score">
           <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
-            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--line)" stroke-width="8"></circle>
-            <circle id="ringArc" cx="60" cy="60" r="50" fill="none" stroke="var(--gold)" stroke-width="8"
-              stroke-linecap="round" transform="rotate(-90 60 60)" stroke-dasharray="314" stroke-dashoffset="314"></circle>
-            <text x="60" y="66" text-anchor="middle" class="num" id="ringNum">--</text>
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--line)" stroke-width="9"></circle>
+            <circle id="ringArc" cx="60" cy="60" r="50" fill="none" stroke="var(--gold)" stroke-width="9"
+              stroke-linecap="round" transform="rotate(-90 60 60)" stroke-dasharray="314.16" stroke-dashoffset="314.16"></circle>
+            <text x="60" y="68" text-anchor="middle" class="num" id="ringNum">--</text>
           </svg>
           <div class="meta">
-            <div class="big" id="verdictTxt">—</div>
+            <div class="big"><bdi dir="ltr" id="verdictScore">--</bdi></div>
             <div class="small" id="metaTxt"></div>
             <span class="verdict" id="verdict">—</span>
           </div>
         </div>
+        <div class="bands" id="bands"></div>
       </div>
 
       <div class="panel">
         <h2 data-i="retention">الاحتفاظ المقدّر</h2>
         <div class="chips" id="chips"></div>
-        <div class="curve"><svg id="curveSvg" viewBox="0 0 600 160" preserveAspectRatio="none" role="img"></svg></div>
+        <div class="curve" style="margin-top:14px"><svg id="curveSvg" viewBox="0 0 600 170" preserveAspectRatio="none" role="img"></svg></div>
       </div>
 
-      <div class="panel">
-        <h2 data-i="signals">الإشارات</h2>
-        <div class="signals" id="signals"></div>
+      <div class="twocol">
+        <div class="panel">
+          <h2 data-i="signals">الإشارات</h2>
+          <div id="signals"></div>
+        </div>
+        <div class="panel">
+          <h2 data-i="response">الاستجابة الحسية والمعرفية (تقدير)</h2>
+          <div id="response"></div>
+        </div>
       </div>
 
-      <div class="panel">
-        <h2 data-i="details">التفاصيل</h2>
-        <dl id="details"></dl>
-      </div>
-
-      <div class="panel">
-        <h2 data-i="tips">ملاحظات للتحسين</h2>
-        <ul class="tips" id="tips"></ul>
+      <div class="twocol">
+        <div class="panel">
+          <h2 data-i="details">التفاصيل</h2>
+          <dl id="details"></dl>
+        </div>
+        <div class="panel">
+          <h2 data-i="tips">ملاحظات للتحسين</h2>
+          <ul class="tips" id="tips"></ul>
+        </div>
       </div>
     </div>
   </section>
@@ -200,60 +217,89 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
   const T = {
     ar: {
       dropTitle: "اسحب الفيديو هنا أو اضغط للاختيار",
-      dropSub: "MP4 · MOV · WebM · يتم التحليل داخل متصفحك، ولا يُرفع الملف إلى أي مكان",
+      dropSub: "أي صيغة فيديو · يتم التحليل داخل متصفحك، ولا يُرفع الملف إلى أي مكان",
       draft: "DRAFT", viral: "الدرجة الفيروسية", retention: "الاحتفاظ المقدّر",
-      signals: "الإشارات", details: "التفاصيل", tips: "ملاحظات للتحسين",
-      visual: "البصري", attention: "الانتباه", memory: "الذاكرة", hook: "الافتتاحية (0–3ث)",
+      signals: "الإشارات", response: "الاستجابة الحسية والمعرفية (تقدير)", details: "التفاصيل", tips: "ملاحظات للتحسين",
+      visual: "البصر", attention: "الانتباه", memory: "الذاكرة", hook: "الافتتاحية (0–3ث)",
+      hearing: "السمع", language: "اللغة",
       cuts: "القطع", staticTime: "وقت الثبات", contrast: "التباين", colour: "الألوان",
-      audio: "ديناميكية الصوت", weakest: "أضعف ثانية", size: "الحجم",
-      none: "لا يوجد", loading: "جارٍ التحليل…", analysing: "جارٍ قراءة الإطارات…",
-      audioStep: "جارٍ قراءة الصوت…", done: "اكتمل التحليل.", noVideo: "هذا الملف ليس فيديو قابلاً للقراءة.",
+      audio: "ديناميكية الصوت", weakest: "أضعف ثانية", none: "لا يوجد",
+      loading: "جارٍ التحليل…", analysing: "جارٍ قراءة الإطارات…", audioStep: "جارٍ قراءة الصوت…",
+      transcoding: "صيغة غير مدعومة في المتصفح، جارٍ تحويلها محلياً (قد يستغرق دقائق)…",
+      needNet: "هذه الصيغة تحتاج أداة تحويل تُحمَّل مرة واحدة، تأكد من اتصال الإنترنت ثم أعد المحاولة.",
+      done: "اكتمل التحليل.", noVideo: "هذا الملف ليس فيديو قابلاً للقراءة.",
       tooLong: "الفيديو أطول من 120 ثانية، ستُحلَّل أول 120 ثانية فقط.",
-      err: "تعذر التحليل: ", verdictHigh: "قوي، جاهز للنشر", verdictMid: "متوسط، يحتاج تحسيناً", verdictLow: "ضعيف، أعد النظر في الافتتاحية",
+      err: "تعذر التحليل: ", copied: "تم نسخ الملخص.", copyFail: "تعذّر النسخ.",
+      bandHigh: "85+ بينتشر", bandMid: "70–84 متوسط", bandLow: "أقل من 70 بيقلبوه",
+      verdictHigh: "قوي، جاهز للنشر", verdictMid: "متوسط، يحتاج تحسيناً", verdictLow: "ضعيف، أعد النظر في الافتتاحية",
       disclaimer: "تقدير heuristic مبني على الحركة والقطع والتباين والألوان والصوت فقط. ليس نموذج Higgsfield، ولا يقيس الرسالة أو المنشئ أو المنتج أو الجمهور.",
       tipHook: "الافتتاحية ضعيفة. ابدأ بحركة أو قطع أو جملة قوية في أول 3 ثوانٍ.",
       tipStatic: "نسبة الثبات عالية. أضف حركة كاميرا أو قطعاً أكثر لتبقى الانتباه.",
       tipCuts: "لا توجد قطع واضحة. قسّم الفيديو إلى لقطات أقصر.",
-      tipContrast: "التباين منخفض. زد الفرق بين الضوء والظل أو الخلفية والموضوع.",
+      tipContrast: "التباين منخفض. زد الفرق بين الضوء والظل أو بين الموضوع والخلفية.",
       tipAudio: "الصوت ثابت أو صامت أغلب الوقت. أضف موسيقى أو مؤثرات أو صوتاً متغيراً.",
+      tipLang: "لم يُرصد إيقاع كلام واضح. إن كان الفيديو يعتمد على الكلام، تأكد من وضوح الصوت.",
       tipWeak: "أضعف لحظة هي الثانية {s}. ضع فيها تغييراً أو قطعاً.",
       tipGood: "لا توجد ملاحظات حرجة. راقب أرقام الاحتفاظ على الفيديو الحقيقي.",
-      json: "JSON", newVideo: "فيديو جديد", langLabel: "EN"
+      json: "JSON", newVideo: "فيديو جديد", copy: "نسخ الملخص", langLabel: "EN",
+      summaryLine: "الدرجة الفيروسية", dur: "المدة"
     },
     en: {
       dropTitle: "Drop a video here or click to choose",
-      dropSub: "MP4 · MOV · WebM · analysed inside your browser; the file is never uploaded",
+      dropSub: "Any video format · analysed inside your browser; the file is never uploaded",
       draft: "DRAFT", viral: "Viral score", retention: "Estimated retention",
-      signals: "Signals", details: "Details", tips: "Improvement notes",
+      signals: "Signals", response: "Sensory & memory response (estimate)", details: "Details", tips: "Improvement notes",
       visual: "Visual", attention: "Attention", memory: "Memory", hook: "Hook (0–3s)",
+      hearing: "Hearing", language: "Language",
       cuts: "Cuts", staticTime: "Static time", contrast: "Contrast", colour: "Colourfulness",
-      audio: "Audio dynamics", weakest: "Weakest second", size: "Size",
-      none: "none", loading: "Loading…", analysing: "Reading frames…",
-      audioStep: "Reading audio…", done: "Analysis complete.", noVideo: "This file is not a readable video.",
+      audio: "Audio dynamics", weakest: "Weakest second", none: "none",
+      loading: "Loading…", analysing: "Reading frames…", audioStep: "Reading audio…",
+      transcoding: "Format not supported by the browser; converting locally (may take minutes)…",
+      needNet: "This format needs a converter downloaded once. Check your internet connection and try again.",
+      done: "Analysis complete.", noVideo: "This file is not a readable video.",
       tooLong: "Video is longer than 120 s; only the first 120 s are analysed.",
-      err: "Could not analyse: ", verdictHigh: "Strong, ready to post", verdictMid: "Average, needs work", verdictLow: "Weak, rework the opening",
-      disclaimer: "Heuristic estimate from motion, cuts, contrast, colour and loudness only. Not Higgsfield's model; it does not measure the message, creator, product or audience.",
+      err: "Could not analyse: ", copied: "Summary copied.", copyFail: "Copy failed.",
+      bandHigh: "85+ will spread", bandMid: "70–84 average", bandLow: "under 70 will flop",
+      verdictHigh: "Strong, ready to post", verdictMid: "Average, needs work", verdictLow: "Weak, rework the opening",
+      disclaimer: "Heuristic estimate from motion, cuts, contrast, colour, loudness and speech rhythm only. Not Higgsfield's model; it does not measure the message, creator, product or audience.",
       tipHook: "The opening is weak. Start with motion, a cut or a strong line in the first 3 seconds.",
       tipStatic: "Static time is high. Add camera motion or more cuts to hold attention.",
       tipCuts: "Few or no clear cuts. Split the video into shorter shots.",
       tipContrast: "Contrast is low. Increase the difference between light and shadow or subject and background.",
       tipAudio: "Audio is flat or silent most of the time. Add music, effects or varied voice.",
+      tipLang: "No clear speech rhythm detected. If the video relies on speech, make sure the voice is clear.",
       tipWeak: "The weakest moment is second {s}. Put a change or a cut there.",
       tipGood: "No critical notes. Check the retention numbers against the real video.",
-      json: "JSON", newVideo: "New video", langLabel: "AR"
+      json: "JSON", newVideo: "New video", copy: "Copy summary", langLabel: "AR",
+      summaryLine: "Viral score", dur: "Duration"
     }
   };
   let lang = "ar";
   const t = k => T[lang][k] ?? k;
+  const $ = id => document.getElementById(id);
+  // Status is stored as a key so it re-translates when the language changes.
+  let statusState = { key: null, text: "", err: false };
+
+  function setStatus(key, err = false, extra = "") {
+    statusState = { key, text: extra, err };
+    renderStatus();
+  }
+  function renderStatus() {
+    const el = $("status");
+    el.className = "status" + (statusState.err ? " err" : "");
+    el.textContent = statusState.key ? (t(statusState.key) + (statusState.text ? " " + statusState.text : "")) : "";
+  }
 
   function applyLang() {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
     document.querySelectorAll("[data-i]").forEach(el => { el.textContent = t(el.dataset.i); });
-    document.getElementById("langBtn").textContent = T[lang].langLabel;
-    document.getElementById("pickBtn").textContent = t("newVideo");
-    document.getElementById("jsonBtn").textContent = t("json");
-    document.getElementById("disclaimer").textContent = t("disclaimer");
+    $("langBtn").textContent = T[lang].langLabel;
+    $("pickBtn").textContent = t("newVideo");
+    $("jsonBtn").textContent = t("json");
+    $("copyBtn").textContent = t("copy");
+    $("disclaimer").textContent = t("disclaimer");
+    renderStatus();
     if (last) render(last);
   }
 
@@ -262,9 +308,10 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
   const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
   const std = a => { if (!a.length) return 0; const m = mean(a); return Math.sqrt(mean(a.map(v => (v - m) ** 2))); };
   const fmtT = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  const SAMPLE_FPS = 2, W = 96, H = 54, CUT_T = 0.35;
-  const MAX_SECONDS = 120;
+  const SAMPLE_FPS = 2, W = 96, H = 54, CUT_T = 0.35, MAX_SECONDS = 120;
+  const CHIP_TIMES = [0, 3, 6, 10, 14, 21];
 
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
@@ -272,18 +319,20 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
 
   function seek(video, time) {
     return new Promise((resolve, reject) => {
-      const onSeek = () => { video.removeEventListener("seeked", onSeek); resolve(); };
-      const onErr = () => { video.removeEventListener("error", onErr); reject(new Error("seek failed")); };
+      const target = Math.min(Math.max(0, time), Math.max(0, video.duration - 0.05));
+      if (Math.abs(video.currentTime - target) < 0.01 && video.readyState >= 2) return resolve();
+      const onSeek = () => { cleanup(); resolve(); };
+      const onErr = () => { cleanup(); reject(new Error("seek failed")); };
+      const cleanup = () => { video.removeEventListener("seeked", onSeek); video.removeEventListener("error", onErr); };
       video.addEventListener("seeked", onSeek);
-      video.addEventListener("error", onErr, { once: true });
-      video.currentTime = Math.min(time, Math.max(0, video.duration - 0.05));
+      video.addEventListener("error", onErr);
+      video.currentTime = target;
     });
   }
 
-  // Read frames at SAMPLE_FPS: returns {gray[][], sat[][], rgbMeanSat}
   async function readFrames(video, duration, onProgress) {
     const n = Math.max(1, Math.floor(duration * SAMPLE_FPS));
-    const grays = [], sats = [];
+    const grays = [];
     let satSum = 0, satCount = 0;
     for (let i = 0; i < n; i++) {
       await seek(video, i / SAMPLE_FPS);
@@ -302,7 +351,24 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
     return { grays, colourfulness: satCount ? satSum / satCount : 0 };
   }
 
-  async function readAudioRms(file, duration) {
+  // Thumbnails at 4 points of the clip for the phone grid.
+  async function readThumbs(video, duration) {
+    const out = [];
+    const tw = 216, th = 384;
+    const c = document.createElement("canvas"); c.width = tw; c.height = th;
+    const cx = c.getContext("2d");
+    for (const f of [0.1, 0.35, 0.6, 0.85]) {
+      try {
+        await seek(video, duration * f);
+        cx.drawImage(video, 0, 0, tw, th);
+        out.push(c.toDataURL("image/jpeg", 0.8));
+      } catch (e) { /* skip a frame that cannot be seeked */ }
+    }
+    return out;
+  }
+
+  // Per-second loudness (dBFS) and a 50 Hz envelope for speech-rhythm detection.
+  async function readAudio(file) {
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
@@ -315,24 +381,30 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
         const d = buf.getChannelData(c);
         for (let i = 0; i < len; i++) mono[i] += d[i] / chans;
       }
-      const secs = Math.max(1, Math.ceil(duration));
-      const out = [];
+      const secs = Math.ceil(len / sr);
+      const rms = [];
       for (let s = 0; s < secs; s++) {
         const a = Math.floor(s * sr), b = Math.min(len, Math.floor((s + 1) * sr));
         if (a >= len) break;
         let sum = 0;
         for (let i = a; i < b; i++) sum += mono[i] * mono[i];
-        const r = Math.sqrt(sum / Math.max(1, b - a)) + 1e-9;
-        out.push(20 * Math.log10(r));
+        rms.push(20 * Math.log10(Math.sqrt(sum / Math.max(1, b - a)) + 1e-9));
       }
-      return out;
+      const win = Math.floor(sr / 50);
+      const env = [];
+      for (let a = 0; a + win <= len; a += win) {
+        let sum = 0;
+        for (let i = a; i < a + win; i++) sum += mono[i] * mono[i];
+        env.push(Math.sqrt(sum / win));
+      }
+      return { rms, env };
     } catch (e) {
-      return null; // no decodable audio track
+      return null;
     }
   }
 
   // ---------- analysis (mirrors scripts/virality/analyze.py) ----------
-  function analyse(frames, duration, rms, meta) {
+  function analyse(frames, duration, audio, meta) {
     const grays = frames.grays, n = grays.length;
     const diffs = [];
     for (let i = 0; i + 1 < n; i++) {
@@ -356,13 +428,34 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
     const cutDensity = cutTimes.length / Math.max(duration, 1) * 10;
     const attention = 100 * clamp(0.45 * clamp(motionMean / 0.04) + 0.30 * clamp(cutDensity / 4) + 0.25 * (1 - staticShare));
 
-    let audioDyn = 0, audioPresent = 0, hasAudio = false;
-    if (rms && rms.length) {
+    // Audio: dynamics, presence and speech-like rhythm (2–8 envelope peaks per second, not silent).
+    let audioDyn = 0, audioPresent = 0, hasAudio = false, language = 0;
+    if (audio && audio.rms && audio.rms.length) {
       hasAudio = true;
+      const rms = audio.rms;
       const silence = rms.filter(v => v < -50).length / rms.length;
       audioDyn = clamp(std(rms) / 6);
       audioPresent = 1 - silence;
+
+      const env = audio.env;
+      const envMean = mean(env);
+      const perSec = 50;
+      let speechSeconds = 0, counted = 0;
+      for (let s = 0; s < rms.length; s++) {
+        if (rms[s] < -40) continue;
+        counted++;
+        const seg = env.slice(s * perSec, (s + 1) * perSec);
+        let crossings = 0;
+        for (let i = 1; i < seg.length; i++) {
+          if (seg[i - 1] < envMean && seg[i] >= envMean) crossings++;
+        }
+        if (crossings >= 2 && crossings <= 8) speechSeconds++;
+      }
+      language = counted ? speechSeconds / counted : 0;
     }
+    const hearing = hasAudio ? 100 * clamp(0.6 * audioPresent + 0.4 * audioDyn) : 0;
+    const languageScore = hasAudio ? 100 * clamp(language) : 0;
+
     const memory = 100 * clamp(0.40 * clamp(cutDensity / 4) + 0.30 * audioDyn + 0.15 * audioPresent + 0.15 * clamp(colourfulness / 0.25));
 
     const head = motion.slice(0, SAMPLE_FPS * 3);
@@ -385,70 +478,91 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
     let weakest = 0;
     eng.forEach((e, i) => { if (e < eng[weakest]) weakest = i; });
 
-    const marks = [0, 3, 6, 10, 14, 21].filter(s => s <= Math.floor(duration));
-    if (!marks.includes(Math.floor(duration))) marks.push(Math.floor(duration));
+    const marks = CHIP_TIMES.map(tt => {
+      const valid = tt <= duration;
+      return { t: tt, label: fmtT(tt), valid, retention: valid ? +curve[Math.min(tt, curve.length - 1)].toFixed(1) : null };
+    });
+
     return {
-      scores: { overall: Math.round(overall), visual: Math.round(visual), attention: Math.round(attention), memory: Math.round(memory), hook: Math.round(hook) },
+      scores: {
+        overall: Math.round(overall), visual: Math.round(visual), attention: Math.round(attention),
+        memory: Math.round(memory), hook: Math.round(hook), hearing: Math.round(hearing), language: Math.round(languageScore)
+      },
       details: {
         cuts: cutTimes.length, cutTimes, staticPct: Math.round(staticShare * 100),
         contrast: +contrast.toFixed(3), colourfulness: +colourfulness.toFixed(3),
         audioPct: hasAudio ? Math.round(audioDyn * 100) : null, hasAudio,
         weakest: fmtT(weakest), weakestIdx: weakest
       },
-      marks: marks.map(s => ({ t: s, label: fmtT(s), retention: +curve[Math.min(s, curve.length - 1)].toFixed(1) })),
-      curve, meta
+      marks, curve, meta
     };
   }
 
   // ---------- rendering ----------
   let last = null;
-  const $ = id => document.getElementById(id);
 
   function render(r) {
     const s = r.scores, d = r.details;
-    // ring
-    const off = 314 - 314 * (s.overall / 100);
-    $("ringArc").style.transition = "stroke-dashoffset .8s ease";
-    $("ringArc").setAttribute("stroke-dashoffset", off.toFixed(1));
+
+    // ring + score
+    const off = 314.16 * (1 - s.overall / 100);
+    const arc = $("ringArc");
+    arc.style.transition = "stroke-dashoffset .8s ease";
+    arc.setAttribute("stroke-dashoffset", off.toFixed(2));
     $("ringNum").textContent = s.overall;
-    const verdict = s.overall >= 85 ? ["verdictHigh", ""] : s.overall >= 70 ? ["verdictMid", "mid"] : ["verdictLow", "low"];
-    $("verdictTxt").textContent = `${s.overall} / 100`;
-    $("verdict").textContent = t(verdict[0]);
-    $("verdict").className = "verdict " + verdict[1];
-    $("metaTxt").textContent = `${r.meta.name} · ${r.meta.w}×${r.meta.h} · ${r.meta.duration.toFixed(1)}s`;
+    $("verdictScore").textContent = `${s.overall} / 100`;
+    const band = s.overall >= 85 ? "high" : s.overall >= 70 ? "mid" : "low";
+    const vcls = band === "high" ? "" : band === "mid" ? "mid" : "low";
+    $("verdict").textContent = t(band === "high" ? "verdictHigh" : band === "mid" ? "verdictMid" : "verdictLow");
+    $("verdict").className = "verdict " + vcls;
+    $("bands").innerHTML = [["high", "bandHigh"], ["mid", "bandMid"], ["low", "bandLow"]].map(([k, key]) =>
+      `<div class="band ${k === band ? "on " + (k === "high" ? "" : k) : ""}"><b>${t(key).split(" ")[0]}</b>${t(key).split(" ").slice(1).join(" ")}</div>`
+    ).join("");
+    $("metaTxt").innerHTML = `${esc(r.meta.name)} · <span class="ltr">${r.meta.w}×${r.meta.h}</span> · <span class="ltr">${r.meta.duration.toFixed(1)}s</span>`;
 
-    // chips
-    const chips = $("chips");
-    chips.innerHTML = "";
-    r.marks.forEach((m, i) => {
-      const isWeak = d.weakestIdx === m.t || (d.weakestIdx >= m.t && (i === r.marks.length - 1 || d.weakestIdx < r.marks[i + 1].t));
-      const div = document.createElement("div");
-      div.className = "chip" + (isWeak && m.retention < 50 ? " weak" : "");
-      div.innerHTML = `<div class="t">${m.label}</div><div class="p">${Math.round(m.retention)}%</div><div class="b"><i style="width:${m.retention}%"></i></div>`;
-      chips.appendChild(div);
-    });
+    // retention chips (6 fixed timestamps like the reference dashboard)
+    const valid = r.marks.filter(m => m.valid);
+    const weakMark = valid.reduce((a, b) => (b.retention < a.retention ? b : a), valid[0]);
+    $("chips").innerHTML = r.marks.map(m => {
+      if (!m.valid) return `<div class="chip off"><div class="t">${m.label}</div><div class="p">—</div><div class="b"></div></div>`;
+      const weak = m === weakMark && valid.length > 1;
+      return `<div class="chip ${weak ? "weak" : ""}"><div class="t">${m.label}</div><div class="p">${Math.round(m.retention)}%</div>
+        <div class="b"><i style="width:${m.retention}%"></i></div></div>`;
+    }).join("");
 
-    // curve
+    // curve: teal at the start, turning red as retention falls
     const svg = $("curveSvg");
-    const w = 600, h = 160, pad = 8;
+    const w = 600, h = 170, pad = 10;
     const n = r.curve.length;
     const pts = r.curve.map((v, i) => `${(pad + (w - 2 * pad) * (i / Math.max(1, n - 1))).toFixed(1)},${(pad + (h - 2 * pad) * (1 - v / 100)).toFixed(1)}`);
     svg.innerHTML = `
-      <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
-        <stop offset="0" stop-color="var(--teal)" stop-opacity=".35"/><stop offset="1" stop-color="var(--teal)" stop-opacity="0"/></linearGradient></defs>
-      <polygon points="${pad},${h - pad} ${pts.join(" ")} ${w - pad},${h - pad}" fill="url(#g)"></polygon>
-      <polyline points="${pts.join(" ")}" fill="none" stroke="var(--teal2)" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>`;
+      <defs>
+        <linearGradient id="stroke" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stop-color="var(--teal2)"/><stop offset="0.7" stop-color="var(--teal)"/><stop offset="1" stop-color="var(--red)"/>
+        </linearGradient>
+        <linearGradient id="fill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stop-color="var(--teal)" stop-opacity=".35"/><stop offset="1" stop-color="var(--teal)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <polygon points="${pad},${h - pad} ${pts.join(" ")} ${w - pad},${h - pad}" fill="url(#fill)"></polygon>
+      <polyline points="${pts.join(" ")}" fill="none" stroke="url(#stroke)" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>`;
 
-    // signals
+    // signals (vision, attention, memory, hook)
     const sig = [["visual", s.visual], ["attention", s.attention], ["memory", s.memory], ["hook", s.hook]];
     $("signals").innerHTML = sig.map(([k, v]) => `
+      <div class="sig"><span class="n">${t(k)}</span><span class="v">${v}%</span>
+        <div class="track"><i style="width:${v}%"></i></div></div>`).join("");
+
+    // response metrics (hearing, language, vision, attention, memory)
+    const resp = [["hearing", s.hearing], ["language", s.language]];
+    $("response").innerHTML = resp.map(([k, v]) => `
       <div class="sig"><span class="n">${t(k)}</span><span class="v">${v}%</span>
         <div class="track"><i style="width:${v}%"></i></div></div>`).join("");
 
     // details
     const cutsTxt = d.cutTimes.length ? d.cutTimes.slice(0, 8).map(x => x + "s").join(", ") : t("none");
     $("details").innerHTML = `
-      <dt>${t("cuts")}</dt><dd>${d.cuts}${d.cuts ? " — " + cutsTxt : ""}</dd>
+      <dt>${t("cuts")}</dt><dd>${d.cuts}${d.cuts ? " — " + esc(cutsTxt) : ""}</dd>
       <dt>${t("staticTime")}</dt><dd>${d.staticPct}%</dd>
       <dt>${t("contrast")}</dt><dd>${d.contrast}</dd>
       <dt>${t("colour")}</dt><dd>${d.colourfulness}</dd>
@@ -462,60 +576,132 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
     if (d.cuts < 2) tips.push(t("tipCuts"));
     if (d.contrast < 0.1) tips.push(t("tipContrast"));
     if (d.hasAudio && d.audioPct < 20) tips.push(t("tipAudio"));
+    if (d.hasAudio && s.language < 20) tips.push(t("tipLang"));
     if (d.weakestIdx > 0) tips.push(t("tipWeak").replace("{s}", d.weakest));
     if (!tips.length) tips.push(t("tipGood"));
-    $("tips").innerHTML = tips.map(x => `<li>${x}</li>`).join("");
+    $("tips").innerHTML = tips.map(x => `<li>${esc(x)}</li>`).join("");
 
     $("stage").classList.remove("hidden");
     $("jsonBtn").disabled = false;
+    $("copyBtn").disabled = false;
+  }
+
+  // ---------- fallback transcoding for formats the browser cannot decode ----------
+  let ffmpegPromise = null;
+  async function getFFmpeg() {
+    if (!ffmpegPromise) {
+      ffmpegPromise = (async () => {
+        const { FFmpeg } = await import("https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js");
+        const { toBlobURL } = await import("https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js");
+        const ff = new FFmpeg();
+        const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
+        await ff.load({
+          coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
+          wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm")
+        });
+        return ff;
+      })();
+    }
+    return ffmpegPromise;
+  }
+
+  async function transcode(file, onProgress) {
+    const ff = await getFFmpeg();
+    const onP = ({ progress }) => onProgress(clamp(progress));
+    ff.on("progress", onP);
+    try {
+      await ff.writeFile("in.bin", new Uint8Array(await file.arrayBuffer()));
+      const code = await ff.exec([
+        "-i", "in.bin", "-t", String(MAX_SECONDS),
+        "-vf", "scale='min(540,iw)':-2",
+        "-c:v", "libvpx", "-b:v", "1M", "-deadline", "realtime", "-cpu-used", "8",
+        "-c:a", "libopus", "-b:a", "96k", "out.webm"
+      ]);
+      if (code !== 0) throw new Error(t("noVideo"));
+      const data = await ff.readFile("out.webm");
+      await ff.deleteFile("in.bin").catch(() => {});
+      await ff.deleteFile("out.webm").catch(() => {});
+      return new File([data], file.name.replace(/\.[^.]+$/, "") + ".webm", { type: "video/webm" });
+    } finally {
+      ff.off && ff.off("progress", onP);
+    }
   }
 
   // ---------- flow ----------
   let currentUrl = null;
-  async function run(file) {
-    const status = $("status"), prog = $("prog"), bar = prog.querySelector("i");
-    status.className = "status"; status.textContent = t("loading");
-    prog.classList.remove("hidden"); bar.style.width = "0%";
+  let busy = false;
+
+  function loadVideo(file) {
+    const video = $("vid");
     if (currentUrl) URL.revokeObjectURL(currentUrl);
     currentUrl = URL.createObjectURL(file);
-
-    const video = $("vid");
     video.src = currentUrl;
     video.muted = true;
+    return new Promise((res, rej) => {
+      const ok = () => { cleanup(); res(); };
+      const bad = () => { cleanup(); rej(new Error(t("noVideo"))); };
+      const cleanup = () => { video.onloadeddata = null; video.onerror = null; };
+      video.onloadeddata = ok;
+      video.onerror = bad;
+    });
+  }
+
+  async function run(file) {
+    if (busy) return;
+    busy = true;
+    const bar = $("prog").querySelector("i");
+    $("prog").classList.remove("hidden");
+    bar.style.width = "0%";
+    $("thumbs").classList.add("hidden");
+    setStatus("loading");
+
+    let source = file;
+    let meta = { name: file.name, w: 0, h: 0, duration: 0 };
     try {
-      await new Promise((res, rej) => {
-        video.onloadedmetadata = () => res();
-        video.onerror = () => rej(new Error(t("noVideo")));
-      });
+      try {
+        await loadVideo(source);
+      } catch (nativeErr) {
+        // Browser cannot decode this container/codec: convert it locally.
+        setStatus("transcoding");
+        try {
+          source = await transcode(file, p => { bar.style.width = (p * 100).toFixed(0) + "%"; });
+        } catch (convErr) {
+          const offline = /fetch|import|network|load/i.test(convErr.message || "");
+          throw new Error(offline ? t("needNet") : t("noVideo"));
+        }
+        await loadVideo(source);
+      }
+      const video = $("vid");
       const realDur = video.duration;
       if (!isFinite(realDur) || realDur <= 0) throw new Error(t("noVideo"));
       const duration = Math.min(realDur, MAX_SECONDS);
-      if (realDur > MAX_SECONDS) status.textContent = t("tooLong");
+      meta = { name: file.name, w: video.videoWidth, h: video.videoHeight, duration: realDur };
+      if (realDur > MAX_SECONDS) setStatus("tooLong");
 
-      $("phoneEmpty").classList.add("hidden");
-      status.textContent = t("analysing");
+      setStatus("analysing");
       const frames = await readFrames(video, duration, p => { bar.style.width = (p * 100).toFixed(0) + "%"; });
-
-      status.textContent = t("audioStep");
-      const rms = await readAudioRms(file, duration);
+      const thumbs = await readThumbs(video, duration);
+      setStatus("audioStep");
+      const audio = await readAudio(source);
       bar.style.width = "100%";
 
-      last = analyse(frames, duration, rms, {
-        name: file.name, w: video.videoWidth, h: video.videoHeight, duration: realDur
-      });
+      last = analyse(frames, duration, audio, meta);
       render(last);
-      status.textContent = t("done");
-      prog.classList.add("hidden");
+      const th = $("thumbs");
+      th.innerHTML = thumbs.map(src => `<img src="${src}" alt="">`).join("");
+      th.classList.toggle("hidden", thumbs.length === 0);
+      setStatus("done");
     } catch (e) {
-      prog.classList.add("hidden");
-      status.className = "status err";
-      status.textContent = t("err") + e.message;
+      setStatus("err", true, e.message);
+    } finally {
+      $("prog").classList.add("hidden");
+      busy = false;
     }
   }
 
   function pick(f) { if (f) run(f); }
 
-  $("file").addEventListener("change", e => pick(e.target.files[0]));
+  $("file").addEventListener("change", e => { pick(e.target.files[0]); e.target.value = ""; });
   $("pickBtn").addEventListener("click", () => $("file").click());
   $("drop").addEventListener("click", () => $("file").click());
   ["dragenter", "dragover"].forEach(ev => $("drop").addEventListener(ev, e => { e.preventDefault(); $("drop").classList.add("over"); }));
@@ -532,6 +718,18 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
     a.download = "virality-report.json";
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  $("copyBtn").addEventListener("click", async () => {
+    if (!last) return;
+    const s = last.scores;
+    const text = `${t("summaryLine")}: ${s.overall}/100 · ${t("visual")} ${s.visual}% · ${t("attention")} ${s.attention}% · ${t("memory")} ${s.memory}% · ${t("hook")} ${s.hook}%\n${last.meta.name} · ${t("dur")} ${last.meta.duration.toFixed(1)}s`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus("copied");
+    } catch (e) {
+      setStatus("copyFail", true);
+    }
   });
 
   applyLang();
