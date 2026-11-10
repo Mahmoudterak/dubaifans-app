@@ -127,6 +127,32 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
 .note { color: var(--muted); font-size: 12px; line-height: 1.8; margin-top: 18px; text-align:center; }
 .hidden { display:none !important; }
 
+/* 2. Bars grow from the start side when results appear */
+@keyframes grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes grow-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.sig .track i, .kpi .bar, .chip .b i { transform-origin: right center; animation: grow-x .9s cubic-bezier(.2,.8,.2,1) both; }
+.timeline .col > div { transform-origin: bottom center; animation: grow-y .7s ease-out both; }
+.curve polyline.draw { stroke-dasharray: 1; animation: draw 1.3s ease-out both; }
+
+/* 3. Weakest second on the timeline */
+.timeline .col.weak .m { background: var(--red); opacity: .9; }
+.timeline .col.weak { animation: flash 1.2s ease-in-out 3; }
+
+/* 4. Scanning line while analysing */
+.scan { position: absolute; left: 10px; right: 10px; height: 2px; top: 8%; background: var(--teal2); box-shadow: 0 0 14px var(--teal2); opacity: 0; pointer-events: none; z-index: 3; border-radius: 2px; }
+.phone.scanning .scan { opacity: 1; animation: scan 1.6s ease-in-out infinite; }
+@keyframes scan { 0%, 100% { top: 6%; } 50% { top: 92%; } }
+.phone.scanning video { opacity: .45; }
+
+/* 5. Quick verdict line next to the score */
+.quick { margin-top: 10px; font-size: 13px; line-height: 1.7; color: var(--text); max-width: 42ch; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
 .landing { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px 18px; margin-bottom: 14px; }
 .landing .eyebrow { font-size: 12px; letter-spacing: .14em; color: var(--teal2); font-weight: 700; text-transform: uppercase; }
 .landing h1 { font-size: 26px; line-height: 1.35; margin: 6px 0 8px; font-weight: 800; }
@@ -224,6 +250,7 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
     <div class="phone-col">
       <div class="phone" id="phone">
         <span class="tag" data-i="draft">DRAFT</span>
+        <div class="scan" id="scan"></div>
         <video id="vid" controls playsinline muted></video>
       </div>
       <div class="thumbs hidden" id="thumbs"></div>
@@ -243,6 +270,7 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
             <div class="big"><bdi dir="ltr" id="verdictScore">--</bdi></div>
             <div class="small" id="metaTxt"></div>
             <span class="verdict" id="verdict">—</span>
+            <div class="quick" id="quickTip"></div>
           </div>
         </div>
         <div class="bands" id="bands"></div>
@@ -508,6 +536,19 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
   const fmtT = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   const rmsOf = audio => (audio && audio.rms) ? audio.rms : [];
   const scoreBand = o => (o >= TH.score_bands.high ? "high" : o >= TH.score_bands.mid ? "mid" : "low");
+  // 1. Count the score up from 0 to its value.
+  function countUp(el, to, suffix = "") {
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { el.textContent = to + suffix; return; }
+    const start = performance.now(), dur = 900;
+    const step = now => {
+      const k = Math.min(1, (now - start) / dur);
+      const eased = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(to * eased) + suffix;
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   const SAMPLE_FPS = 2, W = 96, H = 54, CUT_T = 0.35, MAX_SECONDS = 120;
@@ -763,7 +804,7 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
 
     // Timeline: motion and audio per second, cut markers.
     $("timeline").innerHTML = r.timeline.map(x => `
-      <div class="col ${x.cut ? "cut" : ""}" title="${x.s}s">
+      <div class="col ${x.cut ? "cut" : ""} ${x.s === d.weakestIdx ? "weak" : ""}" title="${x.s}s">
         <div class="m" style="height:${(x.m * 100).toFixed(1)}%"></div>
         <div class="a" style="height:${(x.a * 100).toFixed(1)}%"></div>
       </div>`).join("");
@@ -773,8 +814,8 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
     const arc = $("ringArc");
     arc.style.transition = "stroke-dashoffset .8s ease";
     arc.setAttribute("stroke-dashoffset", off.toFixed(2));
-    $("ringNum").textContent = s.overall;
-    $("verdictScore").textContent = `${s.overall} / 100`;
+    countUp($("ringNum"), s.overall);
+    countUp($("verdictScore"), s.overall, " / 100");
     const band = s.overall >= 85 ? "high" : s.overall >= 70 ? "mid" : "low";
     const vcls = band === "high" ? "" : band === "mid" ? "mid" : "low";
     $("verdict").textContent = t(band === "high" ? "verdictHigh" : band === "mid" ? "verdictMid" : "verdictLow");
@@ -809,7 +850,7 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
         </linearGradient>
       </defs>
       <polygon points="${pad},${h - pad} ${pts.join(" ")} ${w - pad},${h - pad}" fill="url(#fill)"></polygon>
-      <polyline points="${pts.join(" ")}" fill="none" stroke="url(#stroke)" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>`;
+      <polyline class="draw" pathLength="1" points="${pts.join(" ")}" fill="none" stroke="url(#stroke)" stroke-width="3" stroke-linejoin="round"></polyline>`;
 
     // signals (vision, attention, memory, hook)
     const sig = [["visual", s.visual], ["attention", s.attention], ["memory", s.memory], ["hook", s.hook]];
@@ -844,6 +885,7 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
     if (d.weakestIdx > 0) tips.push(t("tipWeak").replace("{s}", d.weakest));
     if (!tips.length) tips.push(t("tipGood"));
     $("tips").innerHTML = tips.map(x => `<li>${esc(x)}</li>`).join("");
+    $("quickTip").textContent = tips[0] || "";
 
     $("stage").classList.remove("hidden");
     $("jsonBtn").disabled = false;
@@ -918,6 +960,7 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
     bar.style.width = "0%";
     $("thumbs").classList.add("hidden");
     setStatus("loading");
+    $("phone").classList.add("scanning");
 
     let source = file;
     let meta = { name: file.name, w: 0, h: 0, duration: 0 };
@@ -960,6 +1003,7 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
     } finally {
       $("prog").classList.add("hidden");
       busy = false;
+      $("phone").classList.remove("scanning");
     }
   }
 
