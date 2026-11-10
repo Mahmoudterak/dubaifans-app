@@ -227,7 +227,7 @@ def analyse(path: str) -> dict:
         "C": clamp(cuts_per_10s / TH["cuts"]["density_full_per_10s"]),
         "T": clamp(v["contrast"] / TH["contrast"]["norm"]),
         "L": clamp(v["colour"] / TH["colour"]["norm"]),
-        "A": clamp(0.5 * dyn + 0.3 * present + 0.2 * bright_mean * 2) if has_audio else 0.0,
+        "A": clamp(0.5 * dyn + 0.5 * present) if has_audio else 0.0,
     }
 
     # Channel scores (0..100).

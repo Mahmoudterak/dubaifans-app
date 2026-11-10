@@ -126,6 +126,25 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
 .actions { display:flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
 .note { color: var(--muted); font-size: 12px; line-height: 1.8; margin-top: 18px; text-align:center; }
 .hidden { display:none !important; }
+
+.tags { display:flex; flex-wrap:wrap; gap:6px; margin-top: 12px; justify-content: inherit; }
+.tag { border: 1px solid var(--teal); color: var(--teal2); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 700; }
+.kpis { display:grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 900px) { .kpis { grid-template-columns: repeat(5, 1fr); } }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; position: relative; overflow: hidden; }
+.kpi .k { font-size: 12px; color: var(--muted); }
+.kpi .v { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; direction: ltr; text-align: start; }
+.kpi .s { font-size: 11px; color: var(--muted); }
+.kpi .bar { position:absolute; bottom:0; inset-inline: 0; height: 4px; background: var(--teal); }
+.timeline { display:flex; align-items:flex-end; gap: 3px; height: 120px; direction: ltr; }
+.timeline .col { flex: 1; display:flex; flex-direction: row; align-items: flex-end; justify-content: center; gap: 2px; height: 100%; min-width: 0; }
+.timeline .col > div { flex: 1; min-height: 2px; }
+.timeline .m { background: var(--teal); opacity: .55; border-radius: 3px 3px 0 0; }
+.timeline .a { background: var(--gold); opacity: .6; border-radius: 3px 3px 0 0; }
+.timeline .cut { position: relative; }
+.timeline .cut::after { content: "✂"; position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 12px; }
+.legend { display:flex; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.legend i { display:inline-block; width: 10px; height: 10px; border-radius: 3px; margin-inline-end: 4px; vertical-align: middle; }
 </style>
 </head>
 <body>
@@ -174,6 +193,22 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
           </div>
         </div>
         <div class="bands" id="bands"></div>
+        <div class="tags" id="tags"></div>
+      </div>
+
+      <div class="panel">
+        <h2 data-i="channels">المؤشرات الخمسة</h2>
+        <div class="kpis" id="kpis"></div>
+      </div>
+
+      <div class="panel">
+        <h2 data-i="timelineTitle">الإشارة عبر الزمن</h2>
+        <div class="timeline" id="timeline"></div>
+        <div class="legend">
+          <span><i style="background:var(--teal)"></i><span data-i="legMotion">الحركة</span></span>
+          <span><i style="background:var(--gold)"></i><span data-i="legAudio">الصوت</span></span>
+          <span>✂ <span data-i="legCut">قطع</span></span>
+        </div>
       </div>
 
       <div class="panel">
@@ -219,6 +254,11 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
       dropTitle: "اسحب الفيديو هنا أو اضغط للاختيار",
       dropSub: "أي صيغة فيديو · يتم التحليل داخل متصفحك، ولا يُرفع الملف إلى أي مكان",
       draft: "DRAFT", viral: "الدرجة الفيروسية", retention: "الاحتفاظ المقدّر",
+      channels: "المؤشرات الخمسة", timelineTitle: "الإشارة عبر الزمن", legMotion: "الحركة", legAudio: "الصوت", legCut: "قطع",
+      kMotion: "الحركة (M)", kCuts: "المونتاج (C)", kContrast: "التباين (T)", kColour: "الألوان (L)", kAudio: "الصوت (A)",
+      kCutsSub: "قطع في 10 ثوانٍ", kMotionSub: "نسبة الحركة", kContrastSub: "انحراف السطوع", kColourSub: "التشبع",
+      kAudioSub: "ديناميكية وحضور الصوت", kNoAudio: "لا يوجد صوت",
+      tagFast: "ريتم سريع", tagCalm: "هادئ", tagHigh: "طاقة عالية", tagSharp: "تباين حاد", tagLow: "تباين منخفض", tagSilent: "صامت", tagBalanced: "متوازن",
       signals: "الإشارات", response: "الاستجابة الحسية والمعرفية (تقدير)", details: "التفاصيل", tips: "ملاحظات للتحسين",
       visual: "البصر", attention: "الانتباه", memory: "الذاكرة", hook: "الافتتاحية (0–3ث)",
       hearing: "السمع", language: "اللغة",
@@ -248,6 +288,11 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
       dropTitle: "Drop a video here or click to choose",
       dropSub: "Any video format · analysed inside your browser; the file is never uploaded",
       draft: "DRAFT", viral: "Viral score", retention: "Estimated retention",
+      channels: "Five channels", timelineTitle: "Signal over time", legMotion: "Motion", legAudio: "Audio", legCut: "Cut",
+      kMotion: "Motion (M)", kCuts: "Cuts (C)", kContrast: "Contrast (T)", kColour: "Colour (L)", kAudio: "Audio (A)",
+      kCutsSub: "cuts per 10 s", kMotionSub: "motion ratio", kContrastSub: "brightness spread", kColourSub: "saturation",
+      kAudioSub: "dynamics and presence", kNoAudio: "No audio",
+      tagFast: "fast rhythm", tagCalm: "calm", tagHigh: "high energy", tagSharp: "sharp contrast", tagLow: "low contrast", tagSilent: "silent", tagBalanced: "balanced",
       signals: "Signals", response: "Sensory & memory response (estimate)", details: "Details", tips: "Improvement notes",
       visual: "Visual", attention: "Attention", memory: "Memory", hook: "Hook (0–3s)",
       hearing: "Hearing", language: "Language",
@@ -274,6 +319,72 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
       summaryLine: "Viral score", dur: "Duration"
     }
   };
+  // Thresholds are generated from thresholds.json by sync_thresholds.py.
+  const TH = /*TH_START*/{
+  "sample_fps": 10,
+  "frame_width": 160,
+  "frame_height": 90,
+  "score_bands": {
+    "high": 85,
+    "mid": 70
+  },
+  "overall_weights": {
+    "visual": 0.25,
+    "attention": 0.35,
+    "memory": 0.15,
+    "hook": 0.25
+  },
+  "motion": {
+    "flow_norm_px": 1.5,
+    "diff_norm": 0.04
+  },
+  "cuts": {
+    "diff_ratio_of_median": 4.0,
+    "min_diff": 0.06,
+    "density_full_per_10s": 4.0
+  },
+  "contrast": {
+    "norm": 0.18,
+    "low": 0.1
+  },
+  "colour": {
+    "norm": 0.25
+  },
+  "static": {
+    "motion_eps": 0.2,
+    "high_share": 0.6
+  },
+  "audio": {
+    "silence_db": -50,
+    "quiet_db": -40,
+    "dyn_norm_db": 6,
+    "low_dynamics": 0.2,
+    "loud_db": -18,
+    "fast_centroid_hz": 2500,
+    "bright_high_ratio": 0.35
+  },
+  "speech": {
+    "min_peaks_per_s": 2,
+    "max_peaks_per_s": 8,
+    "low_share": 0.2
+  },
+  "hook": {
+    "seconds": 3,
+    "motion_norm": 0.04,
+    "contrast_norm": 0.18
+  },
+  "tags": {
+    "fast_rhythm_cuts_per_10s": 3.0,
+    "fast_rhythm_motion": 0.6,
+    "calm_motion": 0.25,
+    "calm_cuts_per_10s": 0.5,
+    "high_energy_loud_db": -18,
+    "high_energy_motion": 0.5,
+    "sharp_contrast": 0.7,
+    "low_contrast": 0.3
+  }
+}/*TH_END*/;
+
   let lang = "ar";
   const t = k => T[lang][k] ?? k;
   const $ = id => document.getElementById(id);
@@ -308,6 +419,8 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
   const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
   const std = a => { if (!a.length) return 0; const m = mean(a); return Math.sqrt(mean(a.map(v => (v - m) ** 2))); };
   const fmtT = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  const rmsOf = audio => (audio && audio.rms) ? audio.rms : [];
+  const scoreBand = o => (o >= TH.score_bands.high ? "high" : o >= TH.score_bands.mid ? "mid" : "low");
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   const SAMPLE_FPS = 2, W = 96, H = 54, CUT_T = 0.35, MAX_SECONDS = 120;
@@ -413,9 +526,13 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
       diffs.push(s / a.length);
     }
     const motion = n > 1 ? [diffs[0], ...diffs] : [0];
-    const dmax = Math.max(1e-6, ...diffs);
+    // Cuts: a step far above the clip's median difference (same rule as analyze.py).
+    const sortedD = [...diffs].sort((a, b) => a - b);
+    const medD = (sortedD.length ? sortedD[Math.floor(sortedD.length / 2)] : 0) + 1e-6;
     const cutTimes = [];
-    diffs.forEach((d, i) => { if (d > CUT_T * dmax && d > 0.08) cutTimes.push(+((i + 1) / SAMPLE_FPS).toFixed(2)); });
+    diffs.forEach((d, i) => {
+      if (d > TH.cuts.diff_ratio_of_median * medD && d > TH.cuts.min_diff) cutTimes.push(+((i + 1) / SAMPLE_FPS).toFixed(2));
+    });
 
     const contrast = mean(grays.map(g => std(Array.from(g))));
     const colourfulness = frames.colourfulness;
@@ -483,7 +600,43 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
       return { t: tt, label: fmtT(tt), valid, retention: valid ? +curve[Math.min(tt, curve.length - 1)].toFixed(1) : null };
     });
 
+    // Feature vector M, C, T, L, A (same formulas as analyze.py).
+    const motionNorm = TH.motion.diff_norm;
+    const featM = clamp(motionMean / motionNorm);
+    const featC = clamp(cutDensity / TH.cuts.density_full_per_10s);
+    const featT = clamp(contrast / TH.contrast.norm);
+    const featL = clamp(colourfulness / TH.colour.norm);
+    const featA = hasAudio ? clamp(0.5 * audioDyn + 0.5 * audioPresent) : 0;
+    const feature_vector = { M: +featM.toFixed(3), C: +featC.toFixed(3), T: +featT.toFixed(3), L: +featL.toFixed(3), A: +featA.toFixed(3) };
+
+    // Style tags (mirrors classify() in analyze.py).
+    const loudDb = hasAudio ? rmsOf(audio).filter(v => v >= TH.audio.silence_db) : [];
+    const meanDb = loudDb.length ? mean(loudDb) : -90;
+    const motionRel = motionMean / motionNorm;
+    const tg = TH.tags;
+    const tags = [];
+    if (cutDensity >= tg.fast_rhythm_cuts_per_10s || motionRel >= tg.fast_rhythm_motion) tags.push("fast");
+    if (motionRel <= tg.calm_motion && cutDensity <= tg.calm_cuts_per_10s) tags.push("calm");
+    if (hasAudio && meanDb >= tg.high_energy_loud_db && motionRel >= tg.high_energy_motion) tags.push("high");
+    if (featT >= tg.sharp_contrast) tags.push("sharp");
+    if (featT <= tg.low_contrast) tags.push("low");
+    if (!hasAudio) tags.push("silent");
+    if (!tags.length) tags.push("balanced");
+
+    // Per-second timeline: motion ratio, audio level, and cut markers.
+    const cutSecs = new Set(cutTimes.map(c => Math.floor(c)));
+    const timeline = [];
+    for (let s = 0; s < secs; s++) {
+      const seg = motion.slice(s * SAMPLE_FPS, (s + 1) * SAMPLE_FPS);
+      const m = clamp(mean(seg) / motionNorm);
+      const rv = hasAudio && audio.rms[s] !== undefined ? audio.rms[s] : -90;
+      timeline.push({ s, m: +m.toFixed(3), a: +clamp((rv + 60) / 60).toFixed(3), cut: cutSecs.has(s) });
+    }
+    const band = scoreBand(Math.round(overall));
+
     return {
+      feature_vector, tags, band, timeline,
+      method: { motion: "frame-difference at 2 fps (browser)", audio: hasAudio ? "decoded-amplitude" : "none" },
       scores: {
         overall: Math.round(overall), visual: Math.round(visual), attention: Math.round(attention),
         memory: Math.round(memory), hook: Math.round(hook), hearing: Math.round(hearing), language: Math.round(languageScore)
@@ -503,6 +656,30 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
 
   function render(r) {
     const s = r.scores, d = r.details;
+    const fv = r.feature_vector;
+    const dur = Math.max(r.meta.duration, 1e-6);
+
+    // Five channel cards.
+    const cutsPer10 = (d.cuts / dur * 10).toFixed(1);
+    $("kpis").innerHTML = [
+      { k: t("kMotion"), v: Math.round(fv.M * 100) + "%", sub: t("kMotionSub"), w: fv.M * 100 },
+      { k: t("kCuts"), v: String(d.cuts), sub: `${cutsPer10} ${t("kCutsSub")}`, w: fv.C * 100 },
+      { k: t("kContrast"), v: String(d.contrast), sub: t("kContrastSub"), w: fv.T * 100 },
+      { k: t("kColour"), v: String(d.colourfulness), sub: t("kColourSub"), w: fv.L * 100 },
+      { k: t("kAudio"), v: d.hasAudio ? d.audioPct + "%" : "—", sub: d.hasAudio ? t("kAudioSub") : t("kNoAudio"), w: d.hasAudio ? fv.A * 100 : 0 },
+    ].map(c => `<div class="kpi"><div class="k">${esc(c.k)}</div><div class="v">${esc(c.v)}</div>
+      <div class="s">${esc(c.sub)}</div><div class="bar" style="width:${clamp(c.w / 100) * 100}%"></div></div>`).join("");
+
+    // Style tags.
+    const tagKey = { fast: "tagFast", calm: "tagCalm", high: "tagHigh", sharp: "tagSharp", low: "tagLow", silent: "tagSilent", balanced: "tagBalanced" };
+    $("tags").innerHTML = r.tags.map(tg => `<span class="tag">${esc(t(tagKey[tg]))}</span>`).join("");
+
+    // Timeline: motion and audio per second, cut markers.
+    $("timeline").innerHTML = r.timeline.map(x => `
+      <div class="col ${x.cut ? "cut" : ""}" title="${x.s}s">
+        <div class="m" style="height:${(x.m * 100).toFixed(1)}%"></div>
+        <div class="a" style="height:${(x.a * 100).toFixed(1)}%"></div>
+      </div>`).join("");
 
     // ring + score
     const off = 314.16 * (1 - s.overall / 100);
