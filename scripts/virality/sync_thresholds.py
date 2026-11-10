@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Copy thresholds.json into virality.html so the page and analyze.py share one set of values.
 
-The page keeps its values between two markers:
+The page (public/virality/index.html) keeps its values between two markers:
     /*TH_START*/ ... /*TH_END*/
 Run this after editing thresholds.json:
     python3 sync_thresholds.py
@@ -16,7 +16,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "thresholds.json")
-DST = os.path.join(HERE, "virality.html")
+DST = os.path.join(HERE, "..", "..", "public", "virality", "index.html")
 PATTERN = re.compile(r"/\*TH_START\*/.*?/\*TH_END\*/", re.S)
 
 

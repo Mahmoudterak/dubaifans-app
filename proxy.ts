@@ -9,8 +9,17 @@ import { SESSION_COOKIE, isValidSessionToken, readAuthConfig } from "./lib/auth/
 const PUBLIC_PATHS = new Set(["/login", "/api/auth/login"]);
 
 export function proxy(request: NextRequest) {
-  const authConfig = readAuthConfig();
   const { pathname } = request.nextUrl;
+
+  // صفحة الأداة العامة: واجهة ثابتة بلا بيانات، تُقدَّم قبل فحص الحماية.
+  if (pathname === "/virality" || pathname === "/virality/") {
+    return NextResponse.rewrite(new URL("/virality/index.html", request.url));
+  }
+  if (pathname === "/virality/index.html") {
+    return NextResponse.next();
+  }
+
+  const authConfig = readAuthConfig();
 
   if (authConfig.misconfigured) {
     return new NextResponse(
