@@ -127,6 +127,20 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
 .note { color: var(--muted); font-size: 12px; line-height: 1.8; margin-top: 18px; text-align:center; }
 .hidden { display:none !important; }
 
+.landing { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 22px 18px; margin-bottom: 14px; }
+.landing .eyebrow { font-size: 12px; letter-spacing: .14em; color: var(--teal2); font-weight: 700; text-transform: uppercase; }
+.landing h1 { font-size: 26px; line-height: 1.35; margin: 6px 0 8px; font-weight: 800; }
+.landing .lead { color: var(--muted); font-size: 15px; line-height: 1.8; margin: 0; }
+.landing .grid2 { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 18px; }
+@media (min-width: 720px) { .landing .grid2 { grid-template-columns: 1fr 1fr; } }
+.landing h3 { font-size: 15px; margin: 0 0 8px; font-weight: 800; }
+.landing ul { margin: 0; padding-inline-start: 18px; color: var(--text); font-size: 14px; line-height: 1.9; }
+.landing .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+.landing .step { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; font-size: 13px; text-align: center; }
+.landing .step b { display: block; color: var(--teal2); font-size: 18px; }
+.landing .for { margin-top: 14px; font-size: 13px; color: var(--muted); }
+.landing .disc { margin-top: 12px; font-size: 12px; color: var(--muted); line-height: 1.7; }
+
 .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top: 12px; justify-content: inherit; }
 .tag { border: 1px solid var(--teal); color: var(--teal2); border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 700; }
 .kpis { display:grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -158,6 +172,45 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
       <button class="btn" id="copyBtn" type="button" disabled>نسخ الملخص</button>
     </div>
   </header>
+
+  <section class="landing" id="landing">
+    <div class="eyebrow" data-i="lEyebrow">تقييم قبل النشر</div>
+    <h1 data-i="lTitle">اعرف قبل النشر: هل فيديوك قوي بما يكفي؟</h1>
+    <p class="lead" data-i="lLead">ارفع الفيديو وخذ تقديراً فورياً لجاذبيته: درجة فيروسية من 100، ومنحنى احتفاظ تقديري بالمشاهدين، وأضعف لحظة فيه، وخطوات واضحة للتحسين. التحليل يتم داخل متصفحك، والملف لا يُرفع إلى أي خادم.</p>
+
+    <div class="steps">
+      <div class="step"><b>1</b><span data-i="lStep1">ارفع الفيديو</span></div>
+      <div class="step"><b>2</b><span data-i="lStep2">يُحلَّل محلياً في ثوانٍ</span></div>
+      <div class="step"><b>3</b><span data-i="lStep3">خذ القرار والتعديلات</span></div>
+    </div>
+
+    <div class="grid2">
+      <div>
+        <h3 data-i="lFeaturesTitle">مميزات الأداة</h3>
+        <ul>
+          <li data-i="lF1">درجة فيروسية من 100 مع تصنيف واضح: ينتشر، متوسط، أو يحتاج تحسيناً</li>
+          <li data-i="lF2">خمسة مؤشرات: الحركة، المونتاج، التباين، الألوان، والصوت</li>
+          <li data-i="lF3">احتفاظ تقديري عند 0 و3 و6 و10 و14 و21 ثانية، مع أضعف لحظة</li>
+          <li data-i="lF4">مؤشرات الانتباه والذاكرة والافتتاحية (أول 3 ثوانٍ)، والسمع وإيقاع الكلام</li>
+          <li data-i="lF5">وسوم للنمط: ريتم سريع، هادئ، طاقة عالية، تباين حاد أو منخفض</li>
+          <li data-i="lF6">يقبل كل صيغ الفيديو، ويصدّر النتائج بصيغة JSON أو كملخص نصي</li>
+        </ul>
+      </div>
+      <div>
+        <h3 data-i="lResultsTitle">ماذا يستفيد العميل من النتائج؟</h3>
+        <ul>
+          <li data-i="lR1">قرار واضح: هل أنشر هذا الفيديو الآن أم أعيد مونتاجه أولاً؟</li>
+          <li data-i="lR2">معرفة الثانية الأضعف بالضبط، فيعدّل المونتير المكان المحدد بدل الفيديو كله</li>
+          <li data-i="lR3">تحسين الافتتاحية، لأنها أكثر ما يحدد هل يكمل المشاهد الفيديو</li>
+          <li data-i="lR4">توازن أفضل بين الحركة والقطع والصوت حسب ما تقوله الأرقام</li>
+          <li data-i="lR5">ملف JSON يمكن حفظه ومقارنته بين نسخ الفيديو أو إرساله للفريق</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="for" data-i="lFor">مناسبة لصناع المحتوى والمسوّقين والمتاجر وفرق الإعلانات الذين يريدون مراجعة الريلز والإعلانات القصيرة قبل نشرها.</p>
+    <p class="disc" data-i="lDisc">هذه تقديرات heuristic من الحركة والقطع والتباين والألوان والصوت، وليست توقعاً مضموناً للانتشار، ولا تقيس الرسالة أو المنشئ أو المنتج أو الجمهور.</p>
+  </section>
 
   <label class="drop" id="drop">
     <strong data-i="dropTitle">اسحب الفيديو هنا أو اضغط للاختيار</strong>
@@ -254,6 +307,23 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
       dropTitle: "اسحب الفيديو هنا أو اضغط للاختيار",
       dropSub: "أي صيغة فيديو · يتم التحليل داخل متصفحك، ولا يُرفع الملف إلى أي مكان",
       draft: "DRAFT", viral: "الدرجة الفيروسية", retention: "الاحتفاظ المقدّر",
+      lEyebrow: "تقييم قبل النشر", lTitle: "اعرف قبل النشر: هل فيديوك قوي بما يكفي؟",
+      lLead: "ارفع الفيديو وخذ تقديراً فورياً لجاذبيته: درجة فيروسية من 100، ومنحنى احتفاظ تقديري بالمشاهدين، وأضعف لحظة فيه، وخطوات واضحة للتحسين. التحليل يتم داخل متصفحك، والملف لا يُرفع إلى أي خادم.",
+      lStep1: "ارفع الفيديو", lStep2: "يُحلَّل محلياً في ثوانٍ", lStep3: "خذ القرار والتعديلات",
+      lFeaturesTitle: "مميزات الأداة", lResultsTitle: "ماذا يستفيد العميل من النتائج؟",
+      lF1: "درجة فيروسية من 100 مع تصنيف واضح: ينتشر، متوسط، أو يحتاج تحسيناً",
+      lF2: "خمسة مؤشرات: الحركة، المونتاج، التباين، الألوان، والصوت",
+      lF3: "احتفاظ تقديري عند 0 و3 و6 و10 و14 و21 ثانية، مع أضعف لحظة",
+      lF4: "مؤشرات الانتباه والذاكرة والافتتاحية (أول 3 ثوانٍ)، والسمع وإيقاع الكلام",
+      lF5: "وسوم للنمط: ريتم سريع، هادئ، طاقة عالية، تباين حاد أو منخفض",
+      lF6: "يقبل كل صيغ الفيديو، ويصدّر النتائج بصيغة JSON أو كملخص نصي",
+      lR1: "قرار واضح: هل أنشر هذا الفيديو الآن أم أعيد مونتاجه أولاً؟",
+      lR2: "معرفة الثانية الأضعف بالضبط، فيعدّل المونتير المكان المحدد بدل الفيديو كله",
+      lR3: "تحسين الافتتاحية، لأنها أكثر ما يحدد هل يكمل المشاهد الفيديو",
+      lR4: "توازن أفضل بين الحركة والقطع والصوت حسب ما تقوله الأرقام",
+      lR5: "ملف JSON يمكن حفظه ومقارنته بين نسخ الفيديو أو إرساله للفريق",
+      lFor: "مناسبة لصناع المحتوى والمسوّقين والمتاجر وفرق الإعلانات الذين يريدون مراجعة الريلز والإعلانات القصيرة قبل نشرها.",
+      lDisc: "هذه تقديرات heuristic من الحركة والقطع والتباين والألوان والصوت، وليست توقعاً مضموناً للانتشار، ولا تقيس الرسالة أو المنشئ أو المنتج أو الجمهور.",
       channels: "المؤشرات الخمسة", timelineTitle: "الإشارة عبر الزمن", legMotion: "الحركة", legAudio: "الصوت", legCut: "قطع",
       kMotion: "الحركة (M)", kCuts: "المونتاج (C)", kContrast: "التباين (T)", kColour: "الألوان (L)", kAudio: "الصوت (A)",
       kCutsSub: "قطع في 10 ثوانٍ", kMotionSub: "نسبة الحركة", kContrastSub: "انحراف السطوع", kColourSub: "التشبع",
@@ -288,6 +358,23 @@ dd { margin: 0; direction: ltr; text-align: start; font-variant-numeric: tabular
       dropTitle: "Drop a video here or click to choose",
       dropSub: "Any video format · analysed inside your browser; the file is never uploaded",
       draft: "DRAFT", viral: "Viral score", retention: "Estimated retention",
+      lEyebrow: "Pre-publish check", lTitle: "Know before you post: is your video strong enough?",
+      lLead: "Upload a video and get an instant estimate of its appeal: a viral score out of 100, an estimated viewer-retention curve, the weakest moment, and clear steps to improve. Analysis runs in your browser; the file is never uploaded to a server.",
+      lStep1: "Upload the video", lStep2: "Analysed locally in seconds", lStep3: "Decide and edit",
+      lFeaturesTitle: "What the tool does", lResultsTitle: "What the client gets from the results",
+      lF1: "A viral score out of 100 with a clear band: will spread, average, or needs work",
+      lF2: "Five channels: motion, cuts, contrast, colour and audio",
+      lF3: "Estimated retention at 0, 3, 6, 10, 14 and 21 seconds, plus the weakest moment",
+      lF4: "Attention, memory and the opening (first 3 seconds), plus hearing and speech rhythm",
+      lF5: "Style tags: fast rhythm, calm, high energy, sharp or low contrast",
+      lF6: "Accepts any video format; exports results as JSON or a text summary",
+      lR1: "A clear decision: post this video now, or re-edit it first?",
+      lR2: "The exact weakest second, so the editor fixes one spot instead of the whole video",
+      lR3: "A better opening, since it is what decides whether viewers keep watching",
+      lR4: "A better balance of motion, cuts and audio, guided by the numbers",
+      lR5: "A JSON file to keep, compare across cuts, or send to the team",
+      lFor: "Made for creators, marketers, shops and ad teams who want to review reels and short ads before publishing.",
+      lDisc: "These are heuristic estimates from motion, cuts, contrast, colour and loudness. They are not a guaranteed forecast of reach, and they do not measure the message, creator, product or audience.",
       channels: "Five channels", timelineTitle: "Signal over time", legMotion: "Motion", legAudio: "Audio", legCut: "Cut",
       kMotion: "Motion (M)", kCuts: "Cuts (C)", kContrast: "Contrast (T)", kColour: "Colour (L)", kAudio: "Audio (A)",
       kCutsSub: "cuts per 10 s", kMotionSub: "motion ratio", kContrastSub: "brightness spread", kColourSub: "saturation",
