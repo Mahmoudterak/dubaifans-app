@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
-"""Heuristic short-video scorer modelled on the Virality Predictor dashboard.
+"""Heuristic short-video analyser that follows the five-channel data-flow design.
 
-This is NOT Higgsfield's model. It measures simple, observable properties of a
-video (motion, cuts, contrast, colour, loudness dynamics, hook strength) with
-ffmpeg and numpy, then maps them to 0-100 scores. Treat the output as a rough
-creative checklist, not a prediction of real performance.
+    raw video
+      -> demux: video frames (ffmpeg) and audio samples (ffmpeg), read separately
+      -> visual channel: contrast, colourfulness, optical-flow motion, cut detection
+      -> audio channel: loudness per second, FFT spectral centroid and bright-band ratio,
+         speech-rhythm estimate from envelope peaks
+      -> feature vector M (motion), C (cuts), T (contrast), L (colour), A (audio)
+      -> heuristic scoring engine (weights and thresholds in thresholds.json)
+      -> score bands and style tags
+
+This is NOT Higgsfield's Virality Predictor model. Every number comes from a simple,
+observable property of the file. Use it as a creative checklist, not a forecast.
 
 Usage:
     python3 analyze.py <video> [--out-dir DIR]
 
 Writes <out-dir>/report.json and <out-dir>/report.html.
+Optical flow uses OpenCV when it is installed; otherwise it falls back to frame
+differences and the report says which method was used.
 """
 
 from __future__ import annotations
@@ -24,26 +33,40 @@ import sys
 
 import numpy as np
 
-SAMPLE_FPS = 2          # frames per second used for motion and cut detection
-THUMB_W, THUMB_H = 96, 54
-CUT_THRESHOLD = 0.35    # normalised frame-difference that counts as a cut
-AUDIO_RATE = 8000
+HERE = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(HERE, "thresholds.json"), encoding="utf-8") as _f:
+    TH = json.load(_f)
+
+try:  # optional: real optical flow
+    import cv2  # type: ignore
+    HAVE_CV2 = True
+except Exception:  # pragma: no cover - depends on the environment
+    cv2 = None
+    HAVE_CV2 = False
+
+AUDIO_RATE = 16000
+FPS = TH["sample_fps"]
+W, H = TH["frame_width"], TH["frame_height"]
+
+
+def clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    return max(lo, min(hi, float(x)))
 
 
 def run_bytes(cmd: list[str]) -> bytes:
     proc = subprocess.run(cmd, capture_output=True)
     if proc.returncode != 0:
-        raise RuntimeError(f"command failed: {' '.join(cmd[:3])} ...\n{proc.stderr.decode(errors='replace')[-800:]}")
+        tail = proc.stderr.decode(errors="replace")[-800:]
+        raise RuntimeError(f"{cmd[0]} failed: {tail}")
     return proc.stdout
 
 
 def probe(path: str) -> dict:
-    out = run_bytes([
-        "ffprobe", "-v", "error", "-print_format", "json",
-        "-show_format", "-show_streams", path,
-    ])
-    info = json.loads(out)
-    video = next((s for s in info.get("streams", []) if s.get("codec_type") == "video"), None)
+    info = json.loads(run_bytes([
+        "ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", path,
+    ]))
+    streams = info.get("streams", [])
+    video = next((s for s in streams if s.get("codec_type") == "video"), None)
     if video is None:
         raise RuntimeError("no video stream found")
     duration = float(info.get("format", {}).get("duration") or video.get("duration") or 0)
@@ -51,161 +74,229 @@ def probe(path: str) -> dict:
         "duration": duration,
         "width": int(video.get("width", 0)),
         "height": int(video.get("height", 0)),
-        "has_audio": any(s.get("codec_type") == "audio" for s in info.get("streams", [])),
+        "has_audio": any(s.get("codec_type") == "audio" for s in streams),
     }
 
 
-def read_frames(path: str) -> np.ndarray:
-    """Return frames as float array (N, H, W, 3) in 0..1 at SAMPLE_FPS."""
+def demux_video(path: str, duration: float) -> np.ndarray:
+    """Video channel: RGB frames at FPS, resized to W x H, as uint8 (N, H, W, 3)."""
     raw = run_bytes([
         "ffmpeg", "-v", "error", "-i", path,
-        "-vf", f"fps={SAMPLE_FPS},scale={THUMB_W}:{THUMB_H},format=rgb24",
+        "-t", str(min(duration, 120)),
+        "-vf", f"fps={FPS},scale={W}:{H},format=rgb24",
         "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1",
     ])
-    frame_size = THUMB_W * THUMB_H * 3
-    n = len(raw) // frame_size
+    frame = W * H * 3
+    n = len(raw) // frame
     if n == 0:
         raise RuntimeError("could not decode any video frames")
-    arr = np.frombuffer(raw[: n * frame_size], dtype=np.uint8).reshape(n, THUMB_H, THUMB_W, 3)
-    return arr.astype(np.float32) / 255.0
+    return np.frombuffer(raw[: n * frame], dtype=np.uint8).reshape(n, H, W, 3)
 
 
-def read_audio_rms(path: str, duration: float) -> np.ndarray:
-    """Per-second RMS loudness in dBFS (empty array if no audio)."""
+def demux_audio(path: str) -> np.ndarray:
+    """Audio channel: mono float samples in -1..1 at AUDIO_RATE (empty if no audio)."""
     raw = run_bytes([
-        "ffmpeg", "-v", "error", "-i", path, "-vn", "-ac", "1",
-        "-ar", str(AUDIO_RATE), "-f", "s16le", "pipe:1",
+        "ffmpeg", "-v", "error", "-i", path, "-vn", "-t", "120",
+        "-ac", "1", "-ar", str(AUDIO_RATE), "-f", "s16le", "pipe:1",
     ])
-    samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+    return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+
+
+def visual_channel(frames: np.ndarray) -> dict:
+    """Contrast, colourfulness, motion per step, and per-step frame differences."""
+    rgb = frames.astype(np.float32) / 255.0
+    gray = rgb @ np.array([0.299, 0.587, 0.114], dtype=np.float32)          # (N, H, W)
+    sat = rgb.max(axis=3) - rgb.min(axis=3)                                  # HSV-style saturation
+
+    contrast = float(gray.std(axis=(1, 2)).mean())
+    colour = float(sat.mean())
+    brightness = float(gray.mean())
+
+    diffs = np.abs(np.diff(gray, axis=0)).mean(axis=(1, 2)) if len(gray) > 1 else np.zeros(1)
+
+    flow_mag = None
+    method = "frame-difference"
+    if HAVE_CV2 and len(frames) > 1:
+        method = "optical-flow (Farneback)"
+        grey8 = (gray * 255).astype(np.uint8)
+        mags = []
+        for i in range(len(grey8) - 1):
+            f = cv2.calcOpticalFlowFarneback(grey8[i], grey8[i + 1], None, 0.5, 2, 9, 2, 5, 1.1, 0)
+            mags.append(float(np.linalg.norm(f, axis=2).mean()))
+        flow_mag = np.array(mags)
+    return {
+        "contrast": contrast, "colour": colour, "brightness": brightness,
+        "diffs": diffs, "flow": flow_mag, "method": method, "gray": gray,
+    }
+
+
+def detect_cuts(diffs: np.ndarray) -> list[float]:
+    if diffs.size == 0:
+        return []
+    med = float(np.median(diffs)) + 1e-6
+    cut = (diffs > TH["cuts"]["diff_ratio_of_median"] * med) & (diffs > TH["cuts"]["min_diff"])
+    return [round((i + 1) / FPS, 2) for i in np.nonzero(cut)[0]]
+
+
+def audio_channel(samples: np.ndarray, duration: float) -> dict | None:
+    """Loudness per second, FFT spectral centroid and bright-band ratio, speech rhythm."""
     if samples.size == 0:
-        return np.array([])
-    seconds = max(1, int(math.ceil(duration)))
-    per = AUDIO_RATE
-    rms = []
-    for s in range(seconds):
-        chunk = samples[s * per:(s + 1) * per]
-        if chunk.size == 0:
+        return None
+    sr = AUDIO_RATE
+    secs = max(1, int(math.ceil(duration)))
+    rms_db, centroid, bright = [], [], []
+    freqs = np.fft.rfftfreq(sr, d=1.0 / sr)
+    for s in range(secs):
+        chunk = samples[s * sr:(s + 1) * sr]
+        if chunk.size < sr // 4:
             break
-        r = float(np.sqrt(np.mean(chunk ** 2)) + 1e-9)
-        rms.append(20 * math.log10(r))
-    return np.array(rms)
+        rms = float(np.sqrt(np.mean(chunk ** 2)) + 1e-9)
+        rms_db.append(20 * math.log10(rms))
+        spec = np.abs(np.fft.rfft(chunk * np.hanning(chunk.size), n=sr)) ** 2
+        total = float(spec.sum()) + 1e-12
+        centroid.append(float((freqs * spec).sum() / total))
+        bright.append(float(spec[freqs >= 2000].sum() / total))
+
+    # Envelope peaks per second (syllable-like rhythm), 50 Hz envelope.
+    win = sr // 50
+    usable = samples[: (samples.size // win) * win]
+    env = np.sqrt((usable.reshape(-1, win) ** 2).mean(axis=1)) if usable.size else np.array([])
+    env_mean = float(env.mean()) if env.size else 0.0
+    peaks_per_s = []
+    for s in range(len(rms_db)):
+        seg = env[s * 50:(s + 1) * 50]
+        if seg.size < 2:
+            peaks_per_s.append(0)
+            continue
+        peaks_per_s.append(int(np.sum((seg[:-1] < env_mean) & (seg[1:] >= env_mean))))
+    return {
+        "rms_db": rms_db, "centroid_hz": centroid, "bright_ratio": bright,
+        "peaks_per_s": peaks_per_s,
+    }
 
 
-def clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
-    return max(lo, min(hi, x))
+def clamp_list(vals):
+    return [float(v) for v in vals]
 
 
 def analyse(path: str) -> dict:
     meta = probe(path)
-    frames = read_frames(path)
-    n = frames.shape[0]
-    gray = frames.mean(axis=3)
+    duration = meta["duration"]
+    frames = demux_video(path, duration)
+    v = visual_channel(frames)
+    n_steps = max(1, len(v["diffs"]))
 
-    # Motion between consecutive sampled frames (mean absolute difference).
-    if n > 1:
-        diffs = np.abs(np.diff(gray, axis=0)).mean(axis=(1, 2))
+    motion_series = v["flow"] if v["flow"] is not None else v["diffs"]
+    motion_series = np.concatenate([[motion_series[0]], motion_series]) if motion_series.size else np.zeros(1)
+    if v["flow"] is not None:
+        motion_norm = TH["motion"]["flow_norm_px"]
     else:
-        diffs = np.zeros(1)
-    motion = np.concatenate([[diffs[0]], diffs]) if n > 1 else diffs
+        motion_norm = TH["motion"]["diff_norm"]
+    motion_mean = float(motion_series.mean())
+    # A step counts as static when its motion is below a fraction of the motion norm.
+    static_share = float((motion_series < TH["static"]["motion_eps"] * motion_norm).mean())
 
-    # Cuts: large spikes in motion.
-    cut_flags = diffs > CUT_THRESHOLD * max(diffs.max(), 1e-6) if n > 1 else np.array([False])
-    cut_flags = cut_flags & (diffs > 0.08)
-    cut_times = [round(float(i + 1) / SAMPLE_FPS, 2) for i in np.nonzero(cut_flags)[0]]
+    cuts = detect_cuts(v["diffs"])
+    dur = max(duration, 1e-6)
+    cuts_per_10s = len(cuts) / dur * 10
 
-    # Visual qualities over the whole clip.
-    contrast = float(gray.std(axis=(1, 2)).mean())               # ~0..0.3 typical
-    sat = frames.max(axis=3) - frames.min(axis=3)
-    colourfulness = float(sat.mean())                              # ~0..0.5 typical
-    brightness = float(gray.mean())
-    balance = 1 - abs(brightness - 0.5) * 2                        # 1 = mid-tone
-
-    visual_score = 100 * (
-        0.40 * clamp(contrast / 0.18)
-        + 0.35 * clamp(colourfulness / 0.25)
-        + 0.25 * clamp(balance)
-    )
-
-    # Motion / cut density drive attention.
-    motion_mean = float(motion.mean())
-    static_share = float((motion < 0.01).mean())
-    cut_density = len(cut_times) / max(meta["duration"], 1) * 10   # cuts per 10 s
-    attention_score = 100 * clamp(
-        0.45 * clamp(motion_mean / 0.04)
-        + 0.30 * clamp(cut_density / 4)
-        + 0.25 * (1 - static_share)
-    )
-
-    # Audio dynamics (only if present).
-    rms = read_audio_rms(path, meta["duration"]) if meta["has_audio"] else np.array([])
-    if rms.size:
-        audio_std = float(np.std(rms))
-        silence_share = float((rms < -50).mean())
-        audio_dyn = clamp(audio_std / 6)
-        audio_present = 1 - silence_share
+    # Audio channel.
+    a = audio_channel(demux_audio(path), duration) if meta["has_audio"] else None
+    has_audio = a is not None and len(a["rms_db"]) > 0
+    if has_audio:
+        rms = np.array(a["rms_db"])
+        silence_share = float((rms < TH["audio"]["silence_db"]).mean())
+        dyn = clamp(float(rms.std()) / TH["audio"]["dyn_norm_db"])
+        present = 1 - silence_share
+        mean_db = float(rms[rms >= TH["audio"]["silence_db"]].mean()) if (rms >= TH["audio"]["silence_db"]).any() else -90.0
+        centroid_mean = float(np.mean(a["centroid_hz"]))
+        bright_mean = float(np.mean(a["bright_ratio"]))
+        speech_ok = [
+            TH["speech"]["min_peaks_per_s"] <= p <= TH["speech"]["max_peaks_per_s"] and r >= TH["audio"]["quiet_db"]
+            for p, r in zip(a["peaks_per_s"], a["rms_db"])
+        ]
+        speech_share = float(np.mean(speech_ok)) if speech_ok else 0.0
     else:
-        audio_dyn = 0.0
-        audio_present = 0.0
+        dyn = present = 0.0
+        mean_db = -90.0
+        centroid_mean = bright_mean = speech_share = 0.0
 
-    # Memory: cuts, audio dynamics and distinctiveness of colour.
-    memory_score = 100 * clamp(
-        0.40 * clamp(cut_density / 4)
-        + 0.30 * audio_dyn
-        + 0.15 * audio_present
-        + 0.15 * clamp(colourfulness / 0.25)
-    )
+    # Feature vector (each 0..1): M motion, C cuts, T contrast, L colour, A audio.
+    feat = {
+        "M": clamp(motion_mean / motion_norm),
+        "C": clamp(cuts_per_10s / TH["cuts"]["density_full_per_10s"]),
+        "T": clamp(v["contrast"] / TH["contrast"]["norm"]),
+        "L": clamp(v["colour"] / TH["colour"]["norm"]),
+        "A": clamp(0.5 * dyn + 0.3 * present + 0.2 * bright_mean * 2) if has_audio else 0.0,
+    }
 
-    # Hook: the first three seconds carry the most weight.
-    head = motion[: SAMPLE_FPS * 3]
-    hook_motion = float(head.mean()) if head.size else 0.0
-    hook_contrast = float(gray[: SAMPLE_FPS * 3].std(axis=(1, 2)).mean()) if n else 0.0
-    hook_score = 100 * clamp(0.6 * clamp(hook_motion / 0.04) + 0.4 * clamp(hook_contrast / 0.18))
+    # Channel scores (0..100).
+    visual_score = 100 * (0.40 * feat["T"] + 0.35 * feat["L"] + 0.25 * clamp(1 - abs(v["brightness"] - 0.5) * 2))
+    attention_score = 100 * clamp(0.45 * feat["M"] + 0.30 * feat["C"] + 0.25 * (1 - static_share))
+    memory_score = 100 * clamp(0.40 * feat["C"] + 0.30 * dyn + 0.15 * present + 0.15 * feat["L"])
+    hook_s = TH["hook"]["seconds"] * FPS
+    head_motion = float(motion_series[:hook_s].mean()) if motion_series.size else 0.0
+    head_contrast = float(v["gray"][:hook_s].std(axis=(1, 2)).mean()) if len(v["gray"]) else 0.0
+    hook_score = 100 * clamp(0.6 * clamp(head_motion / motion_norm) + 0.4 * clamp(head_contrast / TH["hook"]["contrast_norm"]))
+    if has_audio:
+        hearing_score = 100 * clamp(0.6 * present + 0.4 * dyn)
+        language_score = 100 * clamp(speech_share)
+    else:
+        hearing_score = language_score = 0.0
 
-    overall = 0.25 * visual_score + 0.35 * attention_score + 0.15 * memory_score + 0.25 * hook_score
+    W_ = TH["overall_weights"]
+    overall = (W_["visual"] * visual_score + W_["attention"] * attention_score
+               + W_["memory"] * memory_score + W_["hook"] * hook_score)
 
-    # Retention curve: viewers leave faster when the second is low-engagement.
-    seconds = max(1, int(math.ceil(meta["duration"])))
-    per_second_engagement = []
-    for s in range(seconds):
-        idx = slice(s * SAMPLE_FPS, (s + 1) * SAMPLE_FPS)
-        m = float(motion[idx].mean()) if motion[idx].size else 0.0
-        per_second_engagement.append(clamp(m / 0.04))
+    # Retention: viewers leave faster during low-motion seconds.
+    secs = max(1, int(math.ceil(duration)))
+    eng = []
+    for s in range(secs):
+        seg = motion_series[s * FPS:(s + 1) * FPS]
+        eng.append(clamp((float(seg.mean()) if seg.size else 0.0) / motion_norm))
     curve = [100.0]
     viewers = 100.0
-    for e in per_second_engagement:
-        drop = 0.02 + 0.06 * (1 - e)   # 2% to 8% lost per second
-        viewers *= (1 - drop)
+    for e in eng:
+        viewers *= 1 - (0.02 + 0.06 * (1 - e))
         curve.append(round(viewers, 1))
+    weakest = int(np.argmin(eng)) if eng else 0
 
     def fmt_t(t: float) -> str:
         return f"{int(t // 60)}:{int(t % 60):02d}"
 
     marks = []
-    for t in sorted({0, 3, 6, 10, 14, 21, int(meta["duration"])}):
-        if 0 <= t <= len(curve) - 1:
-            marks.append({"time": fmt_t(t), "retention": round(curve[t], 1)})
+    for t in [0, 3, 6, 10, 14, 21]:
+        valid = t <= duration
+        marks.append({"time": fmt_t(t), "retention": round(curve[min(t, len(curve) - 1)], 1) if valid else None})
 
-    weakest = int(np.argmin(per_second_engagement)) if per_second_engagement else 0
-    curve = [float(v) for v in curve]
+    tags = classify(feat, cuts_per_10s, mean_db, motion_mean, motion_norm, has_audio)
+
+    scores = {
+        "overall": round(overall), "visual": round(visual_score), "attention": round(attention_score),
+        "memory": round(memory_score), "hook": round(hook_score),
+        "hearing": round(hearing_score), "language": round(language_score),
+    }
+    band = "high" if scores["overall"] >= TH["score_bands"]["high"] else "mid" if scores["overall"] >= TH["score_bands"]["mid"] else "low"
+
     return {
         "disclaimer": "Heuristic estimate from measurable video properties. Not Higgsfield's Virality Predictor model.",
         "file": os.path.basename(path),
         "meta": meta,
-        "scores": {
-            "overall": round(overall),
-            "visual": round(visual_score),
-            "attention": round(attention_score),
-            "memory": round(memory_score),
-            "hook": round(hook_score),
-        },
+        "method": {"motion": v["method"], "audio_fft": has_audio, "thresholds": "thresholds.json"},
+        "feature_vector": {k: round(val, 3) for k, val in feat.items()},
+        "scores": scores,
+        "band": band,
+        "tags": tags,
         "details": {
-            "cuts": len(cut_times),
-            "cut_times": cut_times,
+            "cuts": len(cuts), "cut_times": cuts[:20],
             "static_share_pct": round(static_share * 100),
-            "contrast": round(contrast, 3),
-            "colourfulness": round(colourfulness, 3),
-            "brightness": round(brightness, 3),
-            "audio_dynamics_pct": round(audio_dyn * 100),
+            "contrast": round(v["contrast"], 3), "colourfulness": round(v["colour"], 3),
+            "brightness": round(v["brightness"], 3),
+            "audio_dynamics_pct": round(dyn * 100) if has_audio else None,
+            "audio_mean_db": round(mean_db, 1) if has_audio else None,
+            "spectral_centroid_hz": round(centroid_mean) if has_audio else None,
+            "bright_band_pct": round(bright_mean * 100) if has_audio else None,
+            "speech_rhythm_pct": round(speech_share * 100) if has_audio else None,
             "weakest_second": fmt_t(weakest),
         },
         "retention": marks,
@@ -213,120 +304,72 @@ def analyse(path: str) -> dict:
     }
 
 
+def classify(feat: dict, cuts_per_10s: float, mean_db: float, motion_mean: float, motion_norm: float, has_audio: bool) -> list[str]:
+    tg = TH["tags"]
+    motion_rel = motion_mean / motion_norm
+    out = []
+    if cuts_per_10s >= tg["fast_rhythm_cuts_per_10s"] or motion_rel >= tg["fast_rhythm_motion"]:
+        out.append("fast-rhythm")
+    if motion_rel <= tg["calm_motion"] and cuts_per_10s <= tg["calm_cuts_per_10s"]:
+        out.append("calm")
+    if has_audio and mean_db >= tg["high_energy_loud_db"] and motion_rel >= tg["high_energy_motion"]:
+        out.append("high-energy")
+    if feat["T"] >= tg["sharp_contrast"]:
+        out.append("sharp-contrast")
+    if feat["T"] <= tg["low_contrast"]:
+        out.append("low-contrast")
+    if not has_audio:
+        out.append("silent")
+    return out or ["balanced"]
+
+
+# ---------- HTML report (static, for the CLI) ----------
+
 def render_html(report: dict) -> str:
     s = report["scores"]
     d = report["details"]
     curve = report["curve"]
-
-    # SVG retention curve.
     w, h, pad = 900, 220, 30
     n = len(curve)
     pts = []
-    for i, v in enumerate(curve):
+    for i, val in enumerate(curve):
         x = pad + (w - 2 * pad) * (i / max(n - 1, 1))
-        y = pad + (h - 2 * pad) * (1 - v / 100)
+        y = pad + (h - 2 * pad) * (1 - val / 100)
         pts.append(f"{x:.1f},{y:.1f}")
     poly = " ".join(pts)
-    area = f"{pad},{h - pad} " + poly + f" {w - pad},{h - pad}"
 
     def bar(label: str, value: int) -> str:
-        return (
-            f'<div class="row"><span class="lbl">{html.escape(label)}</span>'
-            f'<div class="track"><div class="fill" style="width:{value}%"></div></div>'
-            f'<span class="val">{value}%</span></div>'
-        )
+        return (f'<div class="row"><span class="lbl">{html.escape(label)}</span>'
+                f'<div class="track"><div class="fill" style="width:{value}%"></div></div>'
+                f'<span class="val">{value}%</span></div>')
 
-    marks = "".join(
-        f'<div class="tick"><div class="t">{html.escape(m["time"])}</div>'
-        f'<div class="p">{m["retention"]}%</div></div>'
-        for m in report["retention"]
-    )
-
+    tags = " ".join(f'<span class="tag">{html.escape(t)}</span>' for t in report["tags"])
+    fv = report["feature_vector"]
+    fv_txt = " · ".join(f"{k}={v}" for k, v in fv.items())
+    meth = report["method"]
     return f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Virality report: {html.escape(report['file'])}</title>
 <style>
-:root {{ --bg:#0b1a1f; --panel:#0f2228; --line:#2b4a52; --text:#e6f2f2; --muted:#7f9ca2;
-  --teal:#4fb7b0; --gold:#f2b544; --red:#e08b7f; }}
-@media (prefers-color-scheme: light) {{
-  :root:not([data-theme="dark"]) {{ --bg:#eef5f5; --panel:#ffffff; --line:#c9dadd; --text:#10262b; --muted:#56727a; }}
-}}
-:root[data-theme="dark"] {{ --bg:#0b1a1f; --panel:#0f2228; --line:#2b4a52; --text:#e6f2f2; --muted:#7f9ca2; }}
-body {{ margin:0; background:var(--bg); color:var(--text); font-family: system-ui, sans-serif; }}
-main {{ max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }}
-h1 {{ font-size: 22px; margin: 0 0 4px; }}
-.sub {{ color: var(--muted); font-size: 13px; margin-bottom: 20px; }}
-.hero {{ background: var(--panel); border:1px solid var(--line); border-radius: 16px; padding: 24px; text-align:center; }}
-.big {{ font-size: 72px; font-weight: 800; color: var(--gold); line-height: 1; }}
-.big small {{ font-size: 22px; color: var(--muted); }}
-.grid {{ display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }}
-@media (max-width: 640px) {{ .grid {{ grid-template-columns: 1fr; }} }}
-.card {{ background: var(--panel); border:1px solid var(--line); border-radius: 14px; padding: 18px; }}
-.card h2 {{ font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }}
-.row {{ display:flex; align-items:center; gap:10px; margin: 10px 0; }}
-.lbl {{ width: 90px; font-size: 14px; }}
-.track {{ flex:1; height: 10px; background: var(--line); border-radius: 6px; overflow:hidden; }}
-.fill {{ height:100%; background: var(--teal); border-radius: 6px; }}
-.val {{ width: 48px; text-align:right; font-variant-numeric: tabular-nums; font-size: 14px; }}
-.ticks {{ display:flex; justify-content: space-between; margin-top: 8px; }}
-.tick {{ text-align:center; }}
-.tick .t {{ color: var(--muted); font-size: 12px; }}
-.tick .p {{ font-size: 15px; font-weight: 600; }}
-.note {{ color: var(--muted); font-size: 12px; margin-top: 16px; line-height: 1.5; }}
-dl {{ display:grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }}
-dt {{ color: var(--muted); }} dd {{ margin: 0; }}
-svg {{ width: 100%; height: auto; }}
-</style>
-</head>
-<body>
-<main>
-  <h1>Virality report</h1>
-  <div class="sub">{html.escape(report['file'])} · {report['meta']['width']}×{report['meta']['height']} · {report['meta']['duration']:.1f}s</div>
-
-  <section class="hero">
-    <div class="big">{s['overall']}<small>/100</small></div>
-    <div class="sub">Overall heuristic score</div>
-  </section>
-
-  <div class="grid">
-    <section class="card">
-      <h2>Signals</h2>
-      {bar('Visual', s['visual'])}
-      {bar('Attention', s['attention'])}
-      {bar('Memory', s['memory'])}
-      {bar('Hook (0–3s)', s['hook'])}
-    </section>
-
-    <section class="card">
-      <h2>Details</h2>
-      <dl>
-        <dt>Cuts</dt><dd>{d['cuts']} at {', '.join(str(t) + 's' for t in d['cut_times'][:8]) or 'none'}</dd>
-        <dt>Static time</dt><dd>{d['static_share_pct']}%</dd>
-        <dt>Contrast</dt><dd>{d['contrast']}</dd>
-        <dt>Colourfulness</dt><dd>{d['colourfulness']}</dd>
-        <dt>Audio dynamics</dt><dd>{d['audio_dynamics_pct']}%</dd>
-        <dt>Weakest second</dt><dd>{d['weakest_second']}</dd>
-      </dl>
-    </section>
-  </div>
-
-  <section class="card" style="margin-top:16px">
-    <h2>Estimated retention</h2>
-    <svg viewBox="0 0 {w} {h}" role="img" aria-label="Retention curve">
-      <polygon points="{area}" fill="rgba(79,183,176,0.15)"></polygon>
-      <polyline points="{poly}" fill="none" stroke="var(--teal)" stroke-width="3" stroke-linejoin="round"></polyline>
-    </svg>
-    <div class="ticks">{marks}</div>
-  </section>
-
-  <p class="note">{html.escape(report['disclaimer'])} Scores come from motion, cuts, contrast, colour and loudness only. They do not measure the message, the creator, the product or the audience.</p>
-</main>
-</body>
-</html>
-"""
+body{{margin:0;background:#0b1a1f;color:#e6f2f2;font-family:system-ui,sans-serif}}
+main{{max-width:960px;margin:0 auto;padding:24px 16px 48px}}
+.card{{background:#0f2228;border:1px solid #2b4a52;border-radius:14px;padding:18px;margin-top:14px}}
+.big{{font-size:64px;font-weight:800;color:#f2b544}} .muted{{color:#86a4aa;font-size:13px}}
+.row{{display:flex;align-items:center;gap:10px;margin:8px 0}} .lbl{{width:110px}}
+.track{{flex:1;height:10px;background:#2b4a52;border-radius:6px;overflow:hidden}} .fill{{height:100%;background:#4fb7b0}}
+.val{{width:48px;text-align:right}} .tag{{display:inline-block;border:1px solid #4fb7b0;border-radius:999px;padding:2px 10px;margin:2px;font-size:12px}}
+svg{{width:100%;height:auto}}
+</style></head><body><main>
+<h1>Virality report</h1>
+<div class="muted">{html.escape(report['file'])} · {report['meta']['width']}×{report['meta']['height']} · {report['meta']['duration']:.1f}s · band: {report['band']}</div>
+<div class="card" style="text-align:center"><div class="big">{s['overall']}<span class="muted">/100</span></div><div class="muted">Overall heuristic score</div><div style="margin-top:10px">{tags}</div></div>
+<div class="card"><div class="muted">Signals</div>{bar('Visual', s['visual'])}{bar('Attention', s['attention'])}{bar('Memory', s['memory'])}{bar('Hook (0–3s)', s['hook'])}{bar('Hearing', s['hearing'])}{bar('Language', s['language'])}</div>
+<div class="card"><div class="muted">Feature vector (M, C, T, L, A)</div><div>{html.escape(fv_txt)}</div>
+<div class="muted" style="margin-top:8px">Motion: {html.escape(meth['motion'])} · Audio FFT: {meth['audio_fft']}</div></div>
+<div class="card"><div class="muted">Details</div><pre style="white-space:pre-wrap;font-size:13px">{html.escape(json.dumps(d, ensure_ascii=False, indent=2))}</pre></div>
+<div class="card"><div class="muted">Estimated retention</div><svg viewBox="0 0 {w} {h}"><polyline points="{poly}" fill="none" stroke="#4fb7b0" stroke-width="3"/></svg></div>
+<p class="muted">{html.escape(report['disclaimer'])} Thresholds: thresholds.json.</p>
+</main></body></html>"""
 
 
 def main() -> int:
@@ -334,21 +377,18 @@ def main() -> int:
     ap.add_argument("video")
     ap.add_argument("--out-dir", default=None)
     args = ap.parse_args()
-
     if not os.path.isfile(args.video):
         print(f"file not found: {args.video}", file=sys.stderr)
         return 2
     out_dir = args.out_dir or os.path.join(os.path.dirname(os.path.abspath(args.video)), "virality-report")
     os.makedirs(out_dir, exist_ok=True)
-
     report = analyse(args.video)
     with open(os.path.join(out_dir, "report.json"), "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
     with open(os.path.join(out_dir, "report.html"), "w", encoding="utf-8") as f:
         f.write(render_html(report))
-
     s = report["scores"]
-    print(f"overall={s['overall']} visual={s['visual']} attention={s['attention']} memory={s['memory']} hook={s['hook']}")
+    print(f"overall={s['overall']} band={report['band']} tags={','.join(report['tags'])} motion={report['method']['motion']}")
     print(f"report: {os.path.join(out_dir, 'report.html')}")
     return 0
 
